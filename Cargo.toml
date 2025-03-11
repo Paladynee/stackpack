@@ -1,7 +1,8 @@
 [package]
 edition = "2024"
 name = "stackpack"
-version = "0.1.0"
+repository = "https://github.com/Paladynee/stackpack"
+version = "0.1.1"
 license = "MIT"
 description = "A compressor-agnostic compression pipeline."
 
