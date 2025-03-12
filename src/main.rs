@@ -1,6 +1,6 @@
 #![feature(array_windows)]
 
-#[cfg(test)]
+// #[cfg(test)]
 mod tests;
 
 use std::env;
@@ -12,6 +12,7 @@ use algorithms::arith::ArithmeticCoding;
 use algorithms::bwt::Bwt;
 use algorithms::mtf::Mtf;
 use algorithms::pipeline::CompressionPipeline;
+use algorithms::rle::Rle;
 use algorithms::rle2::Rle2;
 use algorithms::rle3::Rle3;
 use compressor::Compressor;
@@ -22,6 +23,7 @@ extern crate voxell_rng;
 
 mod algorithms;
 mod compressor;
+mod cli;
 
 #[derive_fromstr(trim, lowercase, truncate(3))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -56,7 +58,7 @@ fn main() {
         // utilize all of the algorithms
         .with_algorithm(Bwt)
         .with_algorithm(Mtf)
-        .with_algorithm(Rle3)
+        .with_algorithm(Rle { debug: false })
         .with_algorithm(ArithmeticCoding);
 
     if WorkingMode::Corpus == working_mode {

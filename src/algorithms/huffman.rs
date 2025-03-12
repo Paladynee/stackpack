@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 
-use crate::compressor::{Compressor, DecompressionError, Result};
+use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
 
+#[derive(Clone)]
 pub struct HuffmanCoding;
 
 impl Compressor for HuffmanCoding {
@@ -13,9 +14,15 @@ impl Compressor for HuffmanCoding {
         self.huffman_decode(data)
             .map_err(|e| anyhow!(DecompressionError::InvalidInput(e.to_string())))
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "Huffman Coding".into()
+impl CompressorExt for HuffmanCoding {
+    fn long_name(&self) -> &'static str {
+        "Huffman Coding"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["huffman", "huff", "huffcode", "huffman_coding"]
     }
 }
 

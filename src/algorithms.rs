@@ -1,3 +1,5 @@
+use crate::compressor::CompressorExt;
+
 /// Arithmetic coding, provided by the [arcode] crate.
 pub mod arith;
 /// The burrows-wheeler transform. Currently unoptimized.
@@ -17,3 +19,17 @@ pub mod rle3;
 
 // a compression pipeline that combines multiple algorithms
 pub mod pipeline;
+
+/// All algorithms available in the current build of stackpack.
+pub fn all() -> Vec<&'static dyn CompressorExt> {
+    let mut compressors: Vec<&dyn CompressorExt> = vec![];
+    compressors.push(&arith::ArithmeticCoding);
+    compressors.push(&bwt::Bwt);
+    compressors.push(&mtf::Mtf);
+    compressors.push(&re_pair::RePair { debug: false });
+    compressors.push(&rle::Rle { debug: false });
+    compressors.push(&rle2::Rle2);
+    compressors.push(&rle3::Rle3);
+    compressors.push(&recursive_rle::RecursiveRle { debug: false });
+    compressors
+}

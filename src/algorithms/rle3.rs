@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 
-use crate::compressor::{Compressor, DecompressionError, Result};
+use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
 
+#[derive(Clone)]
 pub struct Rle3;
 
 impl Compressor for Rle3 {
@@ -12,9 +13,15 @@ impl Compressor for Rle3 {
     fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         decode(data)
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "AI generated Run-Length Encoding".into()
+impl CompressorExt for Rle3 {
+    fn long_name(&self) -> &'static str {
+        "Run-Length Encoding 3"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["rle3", "run_length_encoding_3"]
     }
 }
 

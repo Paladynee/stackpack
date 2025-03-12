@@ -12,6 +12,11 @@ arcode = "0.2.4"
 derive_fromstr = "0.1"
 lzw = "0.10.0"
 voxell_rng = "0.5.0"
+clap = { version = "4.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+dyn-clone = "1.0.19"
 
 [profile.release]
 debug = true

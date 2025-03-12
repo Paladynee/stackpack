@@ -6,8 +6,10 @@ use std::io::{self, Cursor, Read};
 
 use anyhow::anyhow;
 
+use crate::compressor::CompressorExt;
 use crate::compressor::{Compressor, DecompressionError, Result};
 
+#[derive(Clone)]
 pub struct Rle2;
 
 impl Compressor for Rle2 {
@@ -19,9 +21,15 @@ impl Compressor for Rle2 {
         self.rle_decode(data)
             .map_err(|e| anyhow!(DecompressionError::InvalidInput(e.to_string())))
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "Voxell's Run-Length Encoding".into()
+impl CompressorExt for Rle2 {
+    fn long_name(&self) -> &'static str {
+        "Run-Length Encoding 2"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["rle2", "run_length_encoding_2"]
     }
 }
 

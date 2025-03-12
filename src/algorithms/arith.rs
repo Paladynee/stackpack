@@ -6,10 +6,11 @@ use arcode::{
     bitbit::{BitReader, BitWriter, MSB},
 };
 
-use crate::compressor::{Compressor, DecompressionError};
+use crate::compressor::{Compressor, CompressorExt, DecompressionError};
 
 const ARCODE_PRECISION: u64 = 48;
 
+#[derive(Clone)]
 pub struct ArithmeticCoding;
 
 impl Compressor for ArithmeticCoding {
@@ -20,9 +21,15 @@ impl Compressor for ArithmeticCoding {
     fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         arith_decode(data)
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "Arithmetic Coding".into()
+impl CompressorExt for ArithmeticCoding {
+    fn long_name(&self) -> &'static str {
+        "Arithmetic Coding"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["arcode", "arc", "arithmetic", "arithmetic_coding"]
     }
 }
 

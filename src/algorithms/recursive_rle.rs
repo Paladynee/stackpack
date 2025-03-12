@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 
-use crate::compressor::{Compressor, DecompressionError, Result};
+use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
 
+#[derive(Clone)]
 pub struct RecursiveRle {
     pub debug: bool,
 }
@@ -14,9 +15,15 @@ impl Compressor for RecursiveRle {
     fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         rrle_decode(data)
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "Recursive RLE".into()
+impl CompressorExt for RecursiveRle {
+    fn long_name(&self) -> &'static str {
+        "Recursive Run-Length Encoding"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["rrle", "recursive_rle", "recursive_run_length_encoding"]
     }
 }
 

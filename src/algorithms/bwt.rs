@@ -2,8 +2,9 @@ use core::cmp::Ordering;
 
 use anyhow::anyhow;
 
-use crate::compressor::{Compressor, DecompressionError, Result};
+use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
 
+#[derive(Clone)]
 pub struct Bwt;
 
 fn cmp_rotations(data: &[u8], i: usize, j: usize) -> Ordering {
@@ -27,9 +28,15 @@ impl Compressor for Bwt {
         self.bwt_decode(data)
             .map_err(|e| anyhow!(DecompressionError::InvalidInput(format!("bwt decoder error: {}", e))))
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "Burrows-Wheeler Transform".into()
+impl CompressorExt for Bwt {
+    fn long_name(&self) -> &'static str {
+        "Burrows-Wheeler Transform"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["bwt", "burrows", "burrows_wheeler_transform"]
     }
 }
 

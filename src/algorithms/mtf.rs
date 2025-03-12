@@ -1,5 +1,6 @@
-use crate::compressor::{Compressor, Result};
+use crate::compressor::{Compressor, CompressorExt, Result};
 
+#[derive(Clone)]
 pub struct Mtf;
 
 impl Compressor for Mtf {
@@ -10,9 +11,15 @@ impl Compressor for Mtf {
     fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         Ok(self.mtf_decode(data))
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "Move-to-Front Transform".into()
+impl CompressorExt for Mtf {
+    fn long_name(&self) -> &'static str {
+        "Move-to-front Transform"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["mtf", "move_to_front", "move_to_front_transform"]
     }
 }
 

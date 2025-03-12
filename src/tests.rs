@@ -1,17 +1,18 @@
 #![allow(unused)]
+use anyhow::Result;
 use voxell_rng::rng::XorShift128;
 
-use crate::compressor::Compressor;
+use crate::compressor::{Compressor, CompressorExt, DecompressionError, RoundTripTestResult};
 
 const SHORT_DATA: &[u8] = b"Hello, World!";
 const LONG_DATA: &[u8] =
     b"This is a longer string to test the arithmetic coding algorithm. It should be able to handle various lengths and characters.";
 // FIXME: shim
 // const LONGEST_DATA: &[u8] = include_bytes!("../test_data/enwik18793.txt");
-const LONGEST_DATA: &[u8] = "shim";
+const LONGEST_DATA: &[u8] = b"shim";
 // FIXME: shim
 // const BINARY_DATA: &[u8] = include_bytes!("../test_data/CommonServiceLocator.dll");
-const BINARY_DATA: &[u8] = "shim";
+const BINARY_DATA: &[u8] = b"shim";
 const RNG_DATA: &[u8] = &const {
     // (0..1000).map(|_| XorShift128::default().next_u8()).collect();
     let mut arr = [0u8; 1000];
@@ -40,7 +41,7 @@ const TEST_CASES: &[(&[u8], &str)] = &[
     (EMPTY_DATA, "empty data"),
 ];
 
-pub fn roundtrip_test<C: Compressor>(mut compressor: C) {
+pub fn roundtrip_test<C: CompressorExt>(mut compressor: C) {
     for &(test_case, test_name) in TEST_CASES {
         match compressor.test_roundtrip(test_case) {
             Ok(eq) => {
@@ -49,14 +50,14 @@ pub fn roundtrip_test<C: Compressor>(mut compressor: C) {
                 eprintln!(
                     "Compression ratio for {} with {}: {:.2}%",
                     test_name,
-                    compressor.compressor_name(),
+                    compressor.long_name(),
                     ratio * 100.0
                 );
 
                 assert!(
                     eq.is_successful(),
                     "Roundtrip test for {} failed at {}:\n\tExpected: {:?}\n\tGot: {:?}\n\tCompressed: {:?}",
-                    compressor.compressor_name(),
+                    compressor.long_name(),
                     test_name,
                     eq.get_original(),
                     eq.get_decompressed(),
@@ -67,8 +68,51 @@ pub fn roundtrip_test<C: Compressor>(mut compressor: C) {
                 panic!(
                     "Fatal error while trying to compress/decompress {} with {}: {}",
                     test_name,
-                    compressor.compressor_name(),
+                    compressor.long_name(),
                     e
+                );
+            }
+        }
+    }
+}
+
+pub fn roundtrip_test_basic_compressor<C: Compressor>(mut compressor: C, compressor_name: &str) {
+    for &(test_case, test_name) in TEST_CASES {
+        let mut f = || -> Result<RoundTripTestResult> {
+            let compressed = compressor.compress_bytes(test_case);
+            let decompressed = compressor.decompress_bytes(&compressed)?;
+            let equal = test_case == decompressed.as_slice();
+
+            Ok(RoundTripTestResult {
+                equal,
+                original: test_case,
+                compressed,
+                decompressed,
+            })
+        };
+
+        let roundtrip = f();
+
+        match roundtrip {
+            Ok(eq) => {
+                let ratio = compression_ratio(eq.get_original(), eq.get_compressed());
+
+                eprintln!("Compression ratio for {} with {}: {:.2}%", test_name, compressor_name, ratio * 100.0);
+
+                assert!(
+                    eq.is_successful(),
+                    "Roundtrip test for {} failed at {}:\n\tExpected: {:?}\n\tGot: {:?}\n\tCompressed: {:?}",
+                    compressor_name,
+                    test_name,
+                    eq.get_original(),
+                    eq.get_decompressed(),
+                    eq.get_compressed(),
+                );
+            }
+            Err(e) => {
+                panic!(
+                    "Fatal error while trying to compress/decompress {} with {}: {}",
+                    test_name, compressor_name, e
                 );
             }
         }

@@ -5,8 +5,9 @@ use std::{
     hash::{DefaultHasher, Hasher},
 };
 
-use crate::compressor::{Compressor, DecompressionError, Result};
+use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
 
+#[derive(Clone)]
 pub struct RePair {
     pub debug: bool,
 }
@@ -19,9 +20,15 @@ impl Compressor for RePair {
     fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         self.repair_decode(data)
     }
+}
 
-    fn compressor_name(&self) -> String {
-        "RePair".into()
+impl CompressorExt for RePair {
+    fn long_name(&self) -> &'static str {
+        "Recursive Pairing"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["repair", "re_pair", "recursive_pairing"]
     }
 }
 

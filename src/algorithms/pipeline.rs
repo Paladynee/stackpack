@@ -1,4 +1,4 @@
-use crate::compressor::{Compressor, Result};
+use crate::compressor::{Compressor, CompressorExt, Result};
 
 /// A compression pipeline consisting of multiple compression algorithms.
 ///
@@ -84,26 +84,15 @@ impl Compressor for CompressionPipeline {
         Ok(decompressed)
     }
 
-    fn compressor_name(&self) -> String {
-        format!(
-            "Compression Pipeline: {}",
-            self.pipeline
-                .iter()
-                .enumerate()
-                .map(|(i, algorithm)| format!("#{}: {}", i, algorithm.compressor_name()))
-                .collect::<Vec<String>>()
-                .join(" -> ")
-        )
-    }
-
     fn into_boxed(self) -> Box<dyn Compressor> {
         Box::new(self)
     }
 }
 
+// pipeline is a bit special, so we wont implement CompressorExt on it for now.
+
 #[cfg(test)]
 mod tests {
-
     use crate::algorithms::{arith::ArithmeticCoding, bwt::Bwt, mtf::Mtf, rle::Rle};
 
     use super::*;
@@ -121,9 +110,9 @@ mod tests {
             CompressionPipeline::new().with_algorithm(Mtf).with_algorithm(Rle { debug: true }),
         ];
 
-        for mut pipeline in pipelines {
-            eprintln!("Testing pipeline {}", pipeline.compressor_name());
-            crate::tests::roundtrip_test(pipeline);
+        for (i, mut pipeline) in pipelines.into_iter().enumerate() {
+            eprintln!("Testing pipeline #{}", i);
+            crate::tests::roundtrip_test_basic_compressor(pipeline, "Compression Pipeline");
         }
     }
 }

@@ -2,6 +2,7 @@
 
 pub use anyhow::Result;
 use core::error::Error;
+use dyn_clone::DynClone;
 
 /// Represents an error emitted by the decompression algorithm while decoding data.
 #[derive(Debug)]
@@ -56,29 +57,6 @@ pub trait Compressor: 'static {
     /// Returns an error if the input data was malformed, or if an internal decompressor error occurred.
     fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>>;
 
-    /// Returns the name of the compressor algorithm. Use for debugging purposes.
-    ///
-    /// Defaults to the type name of the compressor.
-    fn compressor_name(&self) -> String {
-        core::any::type_name::<Self>().to_string()
-    }
-
-    /// Performs a round-trip test on the compressor.
-    ///
-    /// Use for sanity checking the compressor and decompressor.
-    fn test_roundtrip<'orig>(&mut self, data: &'orig [u8]) -> Result<RoundTripTestResult<'orig>> {
-        let compressed = self.compress_bytes(data);
-        let decompressed = self.decompress_bytes(&compressed)?;
-        let equal = data == decompressed.as_slice();
-
-        Ok(RoundTripTestResult {
-            equal,
-            original: data,
-            compressed,
-            decompressed,
-        })
-    }
-
     /// Converts the compressor into a boxed trait object.
     /// Useful for storing different compressors in a single collection.
     fn into_boxed(self) -> Box<dyn Compressor>
@@ -89,6 +67,58 @@ pub trait Compressor: 'static {
     }
 }
 
+pub trait CompressorExt: Compressor + DynClone {
+    /// Checks whether the input data is in a correct format that the decompressor can handle. This does not mean
+    /// the decompressor is guaranteed to decode the data.
+    ///
+    /// This should be implemented as lazily as possible. No decoding should actually take place, only checking
+    /// whether the format is valid.
+    fn format_validity_check(&mut self, data: &[u8]) -> Result<bool> {
+        // greedy implementation, because `decompress_bytes` will fail either way.
+        Ok(true)
+    }
+
+    /// Returns the name of the compressor algorithm.
+    /// Use for debugging purposes.
+    ///
+    /// Defaults to the type name of the compressor.
+    fn debug_name(&self) -> String {
+        core::any::type_name::<Self>().to_string()
+    }
+
+    /// Returns the canonial long name of the compressor.
+    /// Used for display purposes.
+    ///
+    /// Ideally uppercased and human-readable.
+    fn long_name(&self) -> &'static str;
+
+    /// Returns the canonical aliases of the compressor.
+    /// Used for parsing the algorithm from strings.
+    ///
+    /// The aliases should be ordered by priority, with the most common alias first.
+    ///
+    /// Must be all-lowercased, and can only use characters from `a-zA-Z0-9_`.
+    fn aliases(&self) -> &'static [&'static str];
+
+    /// Performs a round-trip test on the compressor.
+    ///
+    /// Use for sanity checking the compressor and decompressor.
+    fn test_roundtrip<'orig>(&mut self, data: &'orig [u8]) -> Result<RoundTripTestResult<'orig>> {
+        let compressed = <Self as Compressor>::compress_bytes(self, data);
+        let decompressed = <Self as Compressor>::decompress_bytes(self, &compressed)?;
+        let equal = data == decompressed.as_slice();
+
+        Ok(RoundTripTestResult {
+            equal,
+            original: data,
+            compressed,
+            decompressed,
+        })
+    }
+}
+
+dyn_clone::clone_trait_object!(CompressorExt);
+
 /// Represents the result of a round-trip test.
 ///
 /// Use accessor methods to retrieve the [`result`][RoundTripTestResult::is_successful],
@@ -97,10 +127,10 @@ pub trait Compressor: 'static {
 /// and the [`decompressed data`][RoundTripTestResult::get_decompressed].
 #[derive(Clone, Debug, Hash)]
 pub struct RoundTripTestResult<'orig> {
-    equal: bool,
-    original: &'orig [u8],
-    compressed: Vec<u8>,
-    decompressed: Vec<u8>,
+    pub(crate) equal: bool,
+    pub(crate) original: &'orig [u8],
+    pub(crate) compressed: Vec<u8>,
+    pub(crate) decompressed: Vec<u8>,
 }
 
 impl<'orig> RoundTripTestResult<'orig> {
