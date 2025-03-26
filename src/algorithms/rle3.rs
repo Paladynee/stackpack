@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use anyhow::anyhow;
 
 use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
@@ -15,13 +17,19 @@ impl Compressor for Rle3 {
     }
 }
 
-impl CompressorExt for Rle3 {
-    fn long_name(&self) -> &'static str {
-        "Run-Length Encoding 3"
+impl Display for Rle3 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Run-Length Encoding 3")
     }
+}
 
+impl CompressorExt for Rle3 {
     fn aliases(&self) -> &'static [&'static str] {
         &["rle3", "run_length_encoding_3"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self {})
     }
 }
 
@@ -121,4 +129,14 @@ fn flush_literal(output: &mut Vec<u8>, literal: &mut Vec<u8>) {
         start = end;
     }
     literal.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_tests() {
+        crate::tests::roundtrip_test(Rle3);
+    }
 }

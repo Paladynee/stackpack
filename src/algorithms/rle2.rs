@@ -2,6 +2,7 @@ use core::cmp;
 use core::fmt;
 use core::fmt::Debug;
 use core::str;
+use std::fmt::Display;
 use std::io::{self, Cursor, Read};
 
 use anyhow::anyhow;
@@ -23,13 +24,19 @@ impl Compressor for Rle2 {
     }
 }
 
-impl CompressorExt for Rle2 {
-    fn long_name(&self) -> &'static str {
-        "Run-Length Encoding 2"
+impl Display for Rle2 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Run-length Encoding 2")
     }
+}
 
+impl CompressorExt for Rle2 {
     fn aliases(&self) -> &'static [&'static str] {
         &["rle2", "run_length_encoding_2"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self {})
     }
 }
 

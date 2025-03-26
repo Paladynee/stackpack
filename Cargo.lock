@@ -137,12 +137,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
-
-[[package]]
 name = "fenwick"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -265,13 +259,12 @@ dependencies = [
 
 [[package]]
 name = "stackpack"
-version = "0.1.1"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "arcode",
  "clap",
  "derive_fromstr",
- "dyn-clone",
  "lzw",
  "serde",
  "serde_json",

@@ -1,7 +1,8 @@
+#![allow(unused)] //todo
 use core::fmt;
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::{DefaultHasher, Hasher},
 };
 
@@ -22,13 +23,19 @@ impl Compressor for RePair {
     }
 }
 
-impl CompressorExt for RePair {
-    fn long_name(&self) -> &'static str {
-        "Recursive Pairing"
+impl Display for RePair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Recursive Pairing")
     }
+}
 
+impl CompressorExt for RePair {
     fn aliases(&self) -> &'static [&'static str] {
         &["repair", "re_pair", "recursive_pairing"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self { debug: false })
     }
 }
 

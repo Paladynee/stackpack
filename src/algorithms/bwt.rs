@@ -1,4 +1,5 @@
 use core::cmp::Ordering;
+use std::fmt::Display;
 
 use anyhow::anyhow;
 
@@ -30,13 +31,19 @@ impl Compressor for Bwt {
     }
 }
 
-impl CompressorExt for Bwt {
-    fn long_name(&self) -> &'static str {
-        "Burrows-Wheeler Transform"
+impl Display for Bwt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Burrows-Wheeler Transform")
     }
+}
 
+impl CompressorExt for Bwt {
     fn aliases(&self) -> &'static [&'static str] {
         &["bwt", "burrows", "burrows_wheeler_transform"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self {})
     }
 }
 
@@ -62,18 +69,18 @@ impl Bwt {
         // Find the index of the original string (rotation starting at 0)
         let orig_index = rotations.iter().position(|&i| i == 0).expect("Rotation starting at 0 must exist");
 
-        // Build the transformed output: the last column of each rotation.
-        // For a rotation starting at index i, the last character is at index (i + n - 1) % n.
-        let mut bwt_transformed = Vec::with_capacity(n);
+        // Build the transformed output with enough capacity for both index bytes and transformed data
+        let mut output = Vec::with_capacity(4 + n);
+
+        // Write the original index (as 4 bytes, little-endian) directly
+        output.extend_from_slice(&(orig_index as u32).to_le_bytes());
+
+        // Append the last column of each rotation directly to the output
         for &rot in &rotations {
             let last_char = data[(rot + n - 1) % n];
-            bwt_transformed.push(last_char);
+            output.push(last_char);
         }
 
-        // Prepend the original index (as 4 bytes, little-endian) to the transformed data.
-        let mut output = Vec::with_capacity(4 + n);
-        output.extend_from_slice(&(orig_index as u32).to_le_bytes());
-        output.extend_from_slice(&bwt_transformed);
         output
     }
 
@@ -125,10 +132,11 @@ impl Bwt {
         let mut result = vec![0u8; n];
         let mut row = orig_index;
         // Reconstruct in reverse order.
-        for i in (0..n).rev() {
-            result[i] = bwt_transformed[row];
+        for byte in result.iter_mut().rev() {
+            *byte = bwt_transformed[row];
             row = lf[row];
         }
+
         Ok(result)
     }
 }

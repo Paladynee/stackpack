@@ -1,10 +1,7 @@
-#![feature(array_windows)]
-
-// #[cfg(test)]
+#[cfg(test)]
 mod tests;
 
 use std::env;
-use std::ffi::OsStr;
 use std::fs;
 use std::io;
 
@@ -22,8 +19,8 @@ extern crate arcode;
 extern crate voxell_rng;
 
 mod algorithms;
-mod compressor;
 mod cli;
+mod compressor;
 
 #[derive_fromstr(trim, lowercase, truncate(3))]
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::{fmt::Display, io::Cursor};
 
 use anyhow::{Result, anyhow};
 use arcode::{
@@ -23,13 +23,19 @@ impl Compressor for ArithmeticCoding {
     }
 }
 
-impl CompressorExt for ArithmeticCoding {
-    fn long_name(&self) -> &'static str {
-        "Arithmetic Coding"
+impl Display for ArithmeticCoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Arithmetic Coding")
     }
+}
 
+impl CompressorExt for ArithmeticCoding {
     fn aliases(&self) -> &'static [&'static str] {
         &["arcode", "arc", "arithmetic", "arithmetic_coding"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self {})
     }
 }
 

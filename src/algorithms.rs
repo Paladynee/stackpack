@@ -21,15 +21,17 @@ pub mod rle3;
 pub mod pipeline;
 
 /// All algorithms available in the current build of stackpack.
-pub fn all() -> Vec<&'static dyn CompressorExt> {
-    let mut compressors: Vec<&dyn CompressorExt> = vec![];
-    compressors.push(&arith::ArithmeticCoding);
-    compressors.push(&bwt::Bwt);
-    compressors.push(&mtf::Mtf);
-    compressors.push(&re_pair::RePair { debug: false });
-    compressors.push(&rle::Rle { debug: false });
-    compressors.push(&rle2::Rle2);
-    compressors.push(&rle3::Rle3);
-    compressors.push(&recursive_rle::RecursiveRle { debug: false });
-    compressors
+pub const ALL_COMPRESSORS: [&'static dyn CompressorExt; 8] = [
+    &arith::ArithmeticCoding,
+    &bwt::Bwt,
+    &mtf::Mtf,
+    &re_pair::RePair { debug: false },
+    &rle::Rle { debug: false },
+    &rle2::Rle2,
+    &rle3::Rle3,
+    &recursive_rle::RecursiveRle { debug: false },
+];
+
+pub const fn all() -> &'static [&'static dyn CompressorExt] {
+    &ALL_COMPRESSORS
 }

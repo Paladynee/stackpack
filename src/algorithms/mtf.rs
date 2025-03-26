@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::compressor::{Compressor, CompressorExt, Result};
 
 #[derive(Clone)]
@@ -13,13 +15,19 @@ impl Compressor for Mtf {
     }
 }
 
-impl CompressorExt for Mtf {
-    fn long_name(&self) -> &'static str {
-        "Move-to-front Transform"
+impl Display for Mtf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Move-to-front Transform")
     }
+}
 
+impl CompressorExt for Mtf {
     fn aliases(&self) -> &'static [&'static str] {
         &["mtf", "move_to_front", "move_to_front_transform"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self {})
     }
 }
 
@@ -35,8 +43,11 @@ impl Mtf {
         for &symbol in data {
             let index = alphabet.iter().position(|&x| x == symbol).unwrap();
             encoded.push(index as u8);
-            alphabet.remove(index);
-            alphabet.insert(0, symbol);
+            // alphabet.remove(index);
+            // alphabet.insert(0, symbol);
+
+            // use the specialized rotate_right to move the symbol to the front
+            alphabet[..=index].rotate_right(1);
         }
 
         encoded

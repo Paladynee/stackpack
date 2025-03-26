@@ -1,63 +1,58 @@
-#![allow(unused)]
+use std::fmt::Display;
+
 use anyhow::Result;
 use voxell_rng::rng::XorShift128;
 
 use crate::compressor::{Compressor, CompressorExt, DecompressionError, RoundTripTestResult};
 
-const SHORT_DATA: &[u8] = b"Hello, World!";
-const LONG_DATA: &[u8] =
-    b"This is a longer string to test the arithmetic coding algorithm. It should be able to handle various lengths and characters.";
-// FIXME: shim
-// const LONGEST_DATA: &[u8] = include_bytes!("../test_data/enwik18793.txt");
-const LONGEST_DATA: &[u8] = b"shim";
-// FIXME: shim
-// const BINARY_DATA: &[u8] = include_bytes!("../test_data/CommonServiceLocator.dll");
-const BINARY_DATA: &[u8] = b"shim";
-const RNG_DATA: &[u8] = &const {
-    // (0..1000).map(|_| XorShift128::default().next_u8()).collect();
-    let mut arr = [0u8; 1000];
-    let mut rng = XorShift128::new(0xdeadcafe);
-    let mut i = 0;
-    while i < 1000 {
-        let data = rng.peek_next_u64();
-        arr[i] = (data & 0xFF) as u8;
-        rng = XorShift128::new(data);
-        i += 1;
-    }
-    arr
-};
-const REPEATING_DATA: &[u8] = b"a baba da babble da dabble babble doo bee babble dabble dooble dee boo dooble daddle boo";
+const SHORT_TEXT: &[u8] =
+    b"Hello, Entropy! This is a short data string to test small inputs. It has little repetition, but it should still be handled correctly.";
+const MID_TEXT: &[u8] = b"This is a longer string to test the compression algorithm. It should be able to handle various lengths and characters. \
+    We need to ensure that our compression algorithms work efficiently with different kinds of text patterns, including repeated words, \
+    special characters like !@#$%^&*(), numbers 0123456789, and varying sentence structures. The longer the test data, the more likely \
+    we are to catch edge cases in our implementation.";
+const LONG_TEXT: &[u8] = b"";
 const EMPTY_DATA: &[u8] = &[];
+// .tar taken from one of my modules that i dont remember the name of
+const TAR_DATA: &[u8] = include_bytes!("../test_data/node_modules.tar");
+// .dll taken from TEdit terraria map editor v4.16.1 https://github.com/TEdit/Terraria-Map-Editor/releases/tag/4.16.1
+const DLL_DATA: &[u8] = include_bytes!("../test_data/Newtonsoft.Json.dll");
+// a PE executable of one of the earlier versions of this crate, with some bytes changed to make it not-executable for obvious reasons
+const EXECUTABLE_DATA: &[u8] = include_bytes!("../test_data/stackpack.exe");
+// .json taken from TEdit v4.16.1 (again) https://github.com/TEdit/Terraria-Map-Editor/releases/tag/4.16.1
+const JSON_DATA: &[u8] = include_bytes!("../test_data/npcData.json");
+
 // TODO: add more test cases
 // possibly utilizing some real corpus data
 
 const TEST_CASES: &[(&[u8], &str)] = &[
-    (REPEATING_DATA, "repeating data"),
-    (SHORT_DATA, "short data"),
-    (LONG_DATA, "long data"),
-    (LONGEST_DATA, "longest data"),
-    (BINARY_DATA, "binary data"),
-    (RNG_DATA, "rng data"),
-    (EMPTY_DATA, "empty data"),
+    (SHORT_TEXT, "Short Text"),
+    (MID_TEXT, "Medium Text"),
+    (LONG_TEXT, "Long Text"),
+    (EMPTY_DATA, "Empty Data"),
+    (TAR_DATA, "TAR Data"),
+    (DLL_DATA, "DLL Data"),
+    (EXECUTABLE_DATA, "Executable Data"),
+    (JSON_DATA, "JSON Data"),
 ];
 
-pub fn roundtrip_test<C: CompressorExt>(mut compressor: C) {
+pub fn roundtrip_test<C: CompressorExt + Display>(mut compressor: C) {
     for &(test_case, test_name) in TEST_CASES {
         match compressor.test_roundtrip(test_case) {
             Ok(eq) => {
                 let ratio = compression_ratio(eq.get_original(), eq.get_compressed());
 
                 eprintln!(
-                    "Compression ratio for {} with {}: {:.2}%",
+                    "Compression ratio for {: >15} with {}: (comp/orig){:.2}%",
                     test_name,
-                    compressor.long_name(),
+                    compressor,
                     ratio * 100.0
                 );
 
                 assert!(
                     eq.is_successful(),
                     "Roundtrip test for {} failed at {}:\n\tExpected: {:?}\n\tGot: {:?}\n\tCompressed: {:?}",
-                    compressor.long_name(),
+                    compressor,
                     test_name,
                     eq.get_original(),
                     eq.get_decompressed(),
@@ -65,12 +60,7 @@ pub fn roundtrip_test<C: CompressorExt>(mut compressor: C) {
                 );
             }
             Err(e) => {
-                panic!(
-                    "Fatal error while trying to compress/decompress {} with {}: {}",
-                    test_name,
-                    compressor.long_name(),
-                    e
-                );
+                panic!("Fatal error while trying to compress/decompress {} with {}: {}", test_name, compressor, e);
             }
         }
     }

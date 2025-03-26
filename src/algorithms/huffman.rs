@@ -1,3 +1,7 @@
+#![allow(unused)]
+use std::fmt::Display;
+
+//todo
 use anyhow::anyhow;
 
 use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
@@ -16,13 +20,19 @@ impl Compressor for HuffmanCoding {
     }
 }
 
-impl CompressorExt for HuffmanCoding {
-    fn long_name(&self) -> &'static str {
-        "Huffman Coding"
+impl Display for HuffmanCoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Huffman Coding")
     }
+}
 
+impl CompressorExt for HuffmanCoding {
     fn aliases(&self) -> &'static [&'static str] {
         &["huffman", "huff", "huffcode", "huffman_coding"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self {})
     }
 }
 

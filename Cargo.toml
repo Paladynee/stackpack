@@ -1,22 +1,21 @@
 [package]
+description = "A compressor-agnostic compression pipeline."
 edition = "2024"
+license = "MIT"
 name = "stackpack"
 repository = "https://github.com/Paladynee/stackpack"
-version = "0.1.1"
-license = "MIT"
-description = "A compressor-agnostic compression pipeline."
+version = "0.1.3"
 
 [dependencies]
 anyhow = "1.0.97"
 arcode = "0.2.4"
+clap = { version = "4.4", features = ["derive"] }
 derive_fromstr = "0.1"
 lzw = "0.10.0"
-voxell_rng = "0.5.0"
-clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-dyn-clone = "1.0.19"
+voxell_rng = "0.5.0"
 
 [profile.release]
 debug = true

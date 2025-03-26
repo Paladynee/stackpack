@@ -104,7 +104,7 @@
 //!     "pipeline_name1 -> pipeline_name2 -> ... -> pipeline_nameN"
 //! the order of pipelines is specified in encoding order, meaning that when encoding, "pipeline_name1" is applied first,
 //! followed by "pipeline_name2", and so on.
-
+#![allow(unused)] //todo
 use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -340,7 +340,7 @@ impl AlgorithmParser {
         for algo in algorithms::all() {
             for alias in algo.aliases() {
                 if &name == alias {
-                    return Ok(dyn_clone::clone_box(algo));
+                    return Ok(algo.dyn_clone());
                 }
             }
         }

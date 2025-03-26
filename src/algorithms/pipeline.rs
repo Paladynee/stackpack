@@ -83,13 +83,17 @@ impl Compressor for CompressionPipeline {
 
         Ok(decompressed)
     }
-
-    fn into_boxed(self) -> Box<dyn Compressor> {
-        Box::new(self)
-    }
 }
 
-// pipeline is a bit special, so we wont implement CompressorExt on it for now.
+impl CompressorExt for CompressionPipeline {
+    fn aliases(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self::new())
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -102,12 +106,12 @@ mod tests {
         let mut pipelines = vec![
             CompressionPipeline::new(),
             CompressionPipeline::new().with_algorithm(ArithmeticCoding),
-            CompressionPipeline::new().with_algorithm(Rle { debug: true }),
+            CompressionPipeline::new().with_algorithm(Rle { debug: false }),
             CompressionPipeline::new().with_algorithm(Bwt),
             CompressionPipeline::new().with_algorithm(Mtf),
-            CompressionPipeline::new().with_algorithm(Rle { debug: true }).with_algorithm(Bwt),
+            CompressionPipeline::new().with_algorithm(Rle { debug: false }).with_algorithm(Bwt),
             CompressionPipeline::new().with_algorithm(Bwt).with_algorithm(Mtf),
-            CompressionPipeline::new().with_algorithm(Mtf).with_algorithm(Rle { debug: true }),
+            CompressionPipeline::new().with_algorithm(Mtf).with_algorithm(Rle { debug: false }),
         ];
 
         for (i, mut pipeline) in pipelines.into_iter().enumerate() {

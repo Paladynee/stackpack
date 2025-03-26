@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use anyhow::anyhow;
 
 use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
@@ -17,13 +19,19 @@ impl Compressor for RecursiveRle {
     }
 }
 
-impl CompressorExt for RecursiveRle {
-    fn long_name(&self) -> &'static str {
-        "Recursive Run-Length Encoding"
+impl Display for RecursiveRle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Recursive Run-length Encoding")
     }
+}
 
+impl CompressorExt for RecursiveRle {
     fn aliases(&self) -> &'static [&'static str] {
         &["rrle", "recursive_rle", "recursive_run_length_encoding"]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
+        Box::new(Self { debug: false })
     }
 }
 
@@ -51,7 +59,7 @@ pub fn rrle_encode(data: &[u8]) -> Vec<u8> {
     first_pass.push(current_byte);
 
     // Second pass: compress the counts recursively
-    let mut result = Vec::new();
+    let mut result = vec![1];
     let mut i = 0;
 
     while i < first_pass.len() {
@@ -88,11 +96,7 @@ pub fn rrle_encode(data: &[u8]) -> Vec<u8> {
         }
     }
 
-    // Add a count of RLE passes
-    let mut encoded = vec![1]; // 1 RLE pass left to undo
-    encoded.append(&mut result);
-
-    encoded
+    result
 }
 
 pub fn rrle_decode(data: &[u8]) -> Result<Vec<u8>> {
