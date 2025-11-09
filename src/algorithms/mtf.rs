@@ -1,85 +1,106 @@
-use std::fmt::Display;
+use crate::{algorithms::DynCompressor, compressor::Result};
 
-use crate::compressor::{Compressor, CompressorExt, Result};
+if_tracing! {
+    use tracing::{debug, info};
+}
 
-#[derive(Clone)]
-pub struct Mtf;
+pub const Mtf: DynCompressor = DynCompressor {
+    compress: mtf_encode,
+    decompress: mtf_decode,
+};
 
-impl Compressor for Mtf {
-    fn compress_bytes(&mut self, data: &[u8]) -> Vec<u8> {
-        self.mtf_encode(data)
+pub use self::Mtf as ThisCompressor;
+
+macro_rules! iota {
+    ($ty:ty; $size:expr) => {
+        const {
+            let mut buf = [0; $size];
+            let mut i = 0usize;
+            while i < buf.len() {
+                buf[i] = i as $ty;
+                i += 1;
+            }
+            buf
+        }
+    };
+}
+
+pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) {
+    if_tracing! {
+        debug!(target = "mtf", input_len = data.len(), "mtf encode start");
+    }
+    if data.is_empty() {
+        if_tracing! {
+            debug!(target = "mtf", "mtf encode passthrough: input empty");
+        }
+        return;
     }
 
-    fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        Ok(self.mtf_decode(data))
+    buf.clear();
+    buf.reserve(data.len());
+
+    // maps index to byte value
+    let mut alphabet: [u8; 256] = iota![u8; 256];
+    // maps byte value to index to alphabet
+    let mut pos: [u8; 256] = iota![u8; 256];
+    for b in data.iter().copied() {
+        let idx = pos[b as usize];
+        buf.push(idx);
+
+        // If it's already at front nothing to do.
+        if idx == 0 {
+            continue;
+        };
+
+        let byte = alphabet[idx as usize];
+        alphabet.copy_within(0..idx as usize, 1);
+        alphabet[0] = byte;
+
+        for i in 1..=idx {
+            let v = alphabet[i as usize];
+            pos[v as usize] = i;
+        }
+        pos[byte as usize] = 0;
+    }
+
+    if_tracing! {
+        info!(target = "mtf", input_len = data.len(), output_len = buf.len(), "mtf encode complete");
     }
 }
 
-impl Display for Mtf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Move-to-front Transform")
+pub fn mtf_decode(encoded: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+    if_tracing! {
+        debug!(target = "mtf", input_len = encoded.len(), "mtf decode start");
     }
-}
-
-impl CompressorExt for Mtf {
-    fn aliases(&self) -> &'static [&'static str] {
-        &["mtf", "move_to_front", "move_to_front_transform"]
-    }
-
-    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
-        Box::new(Self {})
-    }
-}
-
-impl Mtf {
-    pub fn mtf_encode(&self, data: &[u8]) -> Vec<u8> {
-        if data.is_empty() {
-            return Vec::new();
+    // If input empty, nothing to do.
+    if encoded.is_empty() {
+        buf.clear();
+        if_tracing! {
+            debug!(target = "mtf", "mtf decode passthrough: input empty");
         }
-
-        let mut alphabet: Vec<u8> = (0..=255).collect();
-        let mut encoded = Vec::with_capacity(data.len());
-
-        for &symbol in data {
-            let index = alphabet.iter().position(|&x| x == symbol).unwrap();
-            encoded.push(index as u8);
-            // alphabet.remove(index);
-            // alphabet.insert(0, symbol);
-
-            // use the specialized rotate_right to move the symbol to the front
-            alphabet[..=index].rotate_right(1);
-        }
-
-        encoded
+        return Ok(());
     }
 
-    pub fn mtf_decode(&self, encoded: &[u8]) -> Vec<u8> {
-        if encoded.is_empty() {
-            return Vec::new();
+    buf.clear();
+    buf.reserve(encoded.len());
+
+    // maps from index to byte value
+    let mut alphabet: [u8; 256] = iota![u8; 256];
+
+    for idx in encoded.iter().copied() {
+        let symbol = alphabet[idx as usize];
+        buf.push(symbol);
+
+        if idx == 0 {
+            continue;
         }
-
-        let mut alphabet: Vec<u8> = (0..=255).collect();
-        let mut decoded = Vec::with_capacity(encoded.len());
-
-        for &index in encoded {
-            let index = index as usize;
-            let symbol = alphabet[index];
-
-            decoded.push(symbol);
-            alphabet.remove(index);
-            alphabet.insert(0, symbol);
-        }
-
-        decoded
+        alphabet.copy_within(0..idx as usize, 1);
+        alphabet[0] = symbol;
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn roundtrip_tests() {
-        crate::tests::roundtrip_test(Mtf);
+    if_tracing! {
+        info!(target = "mtf", input_len = encoded.len(), output_len = buf.len(), "mtf decode complete");
     }
+
+    Ok(())
 }

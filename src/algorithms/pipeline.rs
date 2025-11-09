@@ -1,122 +1,129 @@
-use crate::compressor::{Compressor, CompressorExt, Result};
+use crate::{
+    algorithms::DynCompressor,
+    compressor::{Compressor, Result},
+};
+use core::mem;
+use std::{fmt::Debug, time::Duration};
+use voxell_timer::time_fn;
 
-/// A compression pipeline consisting of multiple compression algorithms.
-///
-/// Supports seamlessly compressing and decompressing a given byte array through a series of algorithms.
-/// This is done by chaining the algorithms together, where the output of one algorithm becomes the input for the next.
-///
-/// For decompression, the order of algorithms is reversed, ensuring that the data is returned to its original form.
-/// This can be done thanks to the guarantees [`Compressor`][Compressor] provides, such that each algorithm can decode
-/// it's own encoded data back to the original data.
+if_tracing! {
+    use tracing::{Level, span};
+}
+
+#[derive(Debug)]
 pub struct CompressionPipeline {
-    pipeline: Vec<Box<dyn Compressor>>,
+    pipeline: Vec<DynCompressor>,
 }
 
 impl CompressionPipeline {
-    /// Creates a new empty compression pipeline. This pipeline will return the data as-is
-    /// until you add algorithms to it.
     pub const fn new() -> Self {
         Self { pipeline: vec![] }
     }
 
-    /// Adds a new algorithm to the pipeline.
-    pub fn push_algorithm<A: Compressor>(&mut self, algorithm: A) {
-        self.pipeline.push(algorithm.into_boxed());
+    pub fn push_algorithm(&mut self, algorithm: DynCompressor) {
+        self.pipeline.push(algorithm);
     }
 
-    /// Adds a new algorithm to the pipeline.
     /// Chain this method to add multiple algorithms in a shorter way.
-    pub fn with_algorithm<A: Compressor>(mut self, algorithm: A) -> Self {
-        self.pipeline.push(algorithm.into_boxed());
+    pub fn with_algorithm(mut self, algorithm: DynCompressor) -> Self {
+        self.pipeline.push(algorithm);
         self
     }
 }
 
 impl Compressor for CompressionPipeline {
-    fn compress_bytes(&mut self, data: &[u8]) -> Vec<u8> {
-        if self.pipeline.is_empty() {
-            return data.to_vec();
+    fn compress_bytes(&mut self, data: &[u8], buf: &mut Vec<u8>) {
+        if_tracing! {
+            let pipeline_span = span!(Level::INFO, "compression_pipeline", stages = self.pipeline.len());
+            let _enter = pipeline_span.enter();
         }
 
-        let mut compressed = vec![];
-
-        // we do it this way because:
-        // we dont want to allocate data in the heap before any compression takes place,
-        // we want to avoid copying data around as much as possible,
-        // and we want to reuse the allocation as much as possible.
-        let mut reference = data;
-
-        for algorithm in self.pipeline.iter_mut() {
-            let encoded = algorithm.compress_bytes(reference);
-            compressed.clear();
-            compressed.extend_from_slice(encoded.as_slice());
-            reference = compressed.as_slice();
-        }
-
-        compressed
-    }
-
-    fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        if self.pipeline.is_empty() {
-            return Ok(data.to_vec());
-        }
-
-        let mut decompressed = vec![];
-
-        // we do it this way because:
-        // we dont want to allocate data in the heap before any compression takes place,
-        // we want to avoid copying data around as much as possible,
-        // and we want to reuse the allocation as much as possible.
-        let mut reference = data;
-
-        for algorithm in self.pipeline.iter_mut().rev() {
-            match algorithm.decompress_bytes(reference) {
-                Ok(decoded) => {
-                    decompressed.clear();
-                    decompressed.extend_from_slice(decoded.as_slice());
-                    reference = decompressed.as_slice();
+        match self.pipeline.len() {
+            0 => {}
+            1 => self.pipeline[0].compress_bytes(data, buf),
+            n => {
+                let mut intermediate: Vec<u8> = vec![];
+                // first algorithm compresses from data to buf
+                let ((), d) = time_fn(|| self.pipeline[0].compress_bytes(data, buf));
+                let mut stage_times: Vec<Duration> = Vec::with_capacity(n);
+                stage_times.push(d);
+                if_tracing! {
+                    tracing::info!(stage = 0, elapsed_ms = %d.as_micros(), out_len = buf.len(), "stage complete");
                 }
 
-                Err(err) => return Err(err),
+                'run_algos: {
+                    let mut ref1 = &mut *buf;
+                    let mut ref2 = &mut intermediate;
+
+                    for algo in self.pipeline.iter_mut().skip(1) {
+                        let ((), d) = time_fn(|| algo.compress_bytes(ref1, ref2));
+                        stage_times.push(d);
+                        if_tracing! {
+                            tracing::info!(elapsed_ms = %d.as_micros(), out_len = ref2.len(), "stage complete");
+                        }
+
+                        // swap the references around (this is so cool)
+                        mem::swap(&mut ref1, &mut ref2);
+                    }
+                    // If the env var STACKPACK_STAGE_TIMINGS is set, print per-stage durations.
+                    if std::env::var("STACKPACK_STAGE_TIMINGS").is_ok() {
+                        eprintln!("Compression pipeline stage timings (ms):");
+                        for (i, t) in stage_times.iter().enumerate() {
+                            eprintln!("  stage {}: {:.3}", i, t.as_secs_f64() * 1000.0);
+                        }
+                    }
+                }
+
+                // write intermediate into buf if it was not the last buffer to get written
+                if n % 2 == 0 {
+                    mem::swap(buf, &mut intermediate);
+                }
             }
         }
-
-        Ok(decompressed)
-    }
-}
-
-impl CompressorExt for CompressionPipeline {
-    fn aliases(&self) -> &'static [&'static str] {
-        &[]
     }
 
-    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
-        Box::new(Self::new())
-    }
-}
+    fn decompress_bytes(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+        if_tracing! {
+            let pipeline_span = span!(Level::INFO, "decompression_pipeline", stages = self.pipeline.len());
+            let _enter = pipeline_span.enter();
+        }
 
-#[cfg(test)]
-mod tests {
-    use crate::algorithms::{arith::ArithmeticCoding, bwt::Bwt, mtf::Mtf, rle::Rle};
+        match self.pipeline.len() {
+            0 => Ok(()),
+            1 => self.pipeline[0].decompress_bytes(data, buf),
+            n => {
+                let mut intermediate: Vec<u8> = vec![];
 
-    use super::*;
+                // first algorithm decompresses from data to buf
+                let (r0, d0) = time_fn(|| self.pipeline[n - 1].decompress_bytes(data, buf));
+                r0?;
+                if_tracing! {
+                    tracing::info!(stage = n - 1, elapsed_ms = %d0.as_micros(), out_len = buf.len(), "stage complete");
+                }
 
-    #[test]
-    fn roundtrip_tests() {
-        let mut pipelines = vec![
-            CompressionPipeline::new(),
-            CompressionPipeline::new().with_algorithm(ArithmeticCoding),
-            CompressionPipeline::new().with_algorithm(Rle { debug: false }),
-            CompressionPipeline::new().with_algorithm(Bwt),
-            CompressionPipeline::new().with_algorithm(Mtf),
-            CompressionPipeline::new().with_algorithm(Rle { debug: false }).with_algorithm(Bwt),
-            CompressionPipeline::new().with_algorithm(Bwt).with_algorithm(Mtf),
-            CompressionPipeline::new().with_algorithm(Mtf).with_algorithm(Rle { debug: false }),
-        ];
+                'run_algos: {
+                    let mut ref1 = &mut *buf;
+                    let mut ref2 = &mut intermediate;
 
-        for (i, mut pipeline) in pipelines.into_iter().enumerate() {
-            eprintln!("Testing pipeline #{}", i);
-            crate::tests::roundtrip_test_basic_compressor(pipeline, "Compression Pipeline");
+                    for algo in self.pipeline.iter_mut().rev().skip(1) {
+                        let (r, d) = time_fn(|| algo.decompress_bytes(ref1, ref2));
+                        r?;
+                        if_tracing! {
+                            tracing::info!(elapsed_ms = %d.as_micros(), out_len = ref2.len(), "stage complete");
+                        }
+
+                        // swap the references around (this is so cool)
+                        mem::swap(&mut ref1, &mut ref2);
+                    }
+                }
+
+                // write intermediate into buf if it was not the last buffer to get written
+                if n % 2 == 0 {
+                    mem::swap(buf, &mut intermediate);
+                }
+
+                Ok(())
+            }
         }
     }
 }

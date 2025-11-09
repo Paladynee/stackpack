@@ -2,46 +2,20 @@
 use std::fmt::Display;
 
 //todo
-use anyhow::anyhow;
+use anyhow::{Result, anyhow};
 
-use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
+use crate::{algorithms::DynCompressor, compressor::DecompressionError};
+pub const Huffman: DynCompressor = DynCompressor {
+    compress: huffman_encode,
+    decompress: huffman_decode,
+};
 
-#[derive(Clone)]
-pub struct HuffmanCoding;
+pub use self::Huffman as ThisCompressor;
 
-impl Compressor for HuffmanCoding {
-    fn compress_bytes(&mut self, data: &[u8]) -> Vec<u8> {
-        self.huffman_encode(data)
-    }
-
-    fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        self.huffman_decode(data)
-            .map_err(|e| anyhow!(DecompressionError::InvalidInput(e.to_string())))
-    }
+pub fn huffman_encode(_data: &[u8], buf: &mut Vec<u8>) {
+    todo!("Huffman coding is currently unimplemented")
 }
 
-impl Display for HuffmanCoding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Huffman Coding")
-    }
-}
-
-impl CompressorExt for HuffmanCoding {
-    fn aliases(&self) -> &'static [&'static str] {
-        &["huffman", "huff", "huffcode", "huffman_coding"]
-    }
-
-    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
-        Box::new(Self {})
-    }
-}
-
-impl HuffmanCoding {
-    pub fn huffman_encode(&mut self, data: &[u8]) -> Vec<u8> {
-        todo!("Huffman coding is currently unimplemented")
-    }
-
-    pub fn huffman_decode(&mut self, data: &[u8]) -> Result<Vec<u8>, DecompressionError> {
-        todo!("Huffman coding is currently unimplemented")
-    }
+pub fn huffman_decode(_data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+    todo!("Huffman coding is currently unimplemented")
 }

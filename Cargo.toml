@@ -8,76 +8,34 @@ version = "0.1.3"
 
 [dependencies]
 anyhow = "1.0.97"
-arcode = "0.2.4"
+thiserror = "1.0"
 clap = { version = "4.4", features = ["derive"] }
-derive_fromstr = "0.1"
+log = "0.4.28"
+cfg-if = "1.0.4"
+
+arcode = "0.2.4"
 lzw = "0.10.0"
+libsais = { version = "0.2.0", features = ["openmp"] }
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0"
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = [
+    "env-filter",
+] }
+tracing-log = { version = "0.2.0", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+derive_fromstr = "0.1"
 voxell_rng = "0.5.0"
+voxell_timer = "1.2.2"
+
+walkdir = "2.5.0"
+no-panic = "0.1.35"
+
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber", "dep:tracing-log"]
 
 [profile.release]
 debug = true
-
-# [lints.clippy]
-# absolute_paths = "warn"
-# alloc_instead_of_core = "warn"
-# as_underscore = "warn"
-# assigning_clones = "warn"
-# bool_to_int_with_if = "warn"
-# borrow_as_ptr = "warn"
-# case_sensitive_file_extension_comparisons = "warn"
-# cfg_not_test = "warn"
-# clone_on_ref_ptr = "warn"
-# complexity = { level = "warn", priority = -1 }
-# create_dir = "warn"
-# decimal_literal_representation = "warn"
-# error_impl_error = "warn"
-# format_push_string = "warn"
-# get_unwrap = "warn"
-# if_then_some_else_none = "warn"
-# impl_trait_in_params = "warn"
-# lossy_float_literal = "warn"
-# missing_assert_message = "warn"
-# missing_asserts_for_indexing = "warn"
-# missing_inline_in_public_items = "warn"
-# multiple_inherent_impl = "warn"
-# multiple_unsafe_ops_per_block = "warn"
-# mutex_atomic = "warn"
-# nursery = { level = "warn", priority = -1 }
-# panic_in_result_fn = "warn"
-# pathbuf_init_then_push = "warn"
-# pattern_type_mismatch = "warn"
-# pedantic = { level = "warn", priority = -1 }
-# perf = { level = "warn", priority = -1 }
-# pub_without_shorthand = "warn"
-# rc_buffer = "warn"
-# rc_mutex = "warn"
-# rest_pat_in_fully_bound_structs = "warn"
-# same_name_method = "warn"
-# std_instead_of_alloc = "warn"
-# std_instead_of_core = "warn"
-# string_slice = "warn"
-# string_to_string = "warn"
-# style = { level = "warn", priority = -1 }
-# suspicious = { level = "warn", priority = -1 }
-# tests_outside_test_module = "warn"
-# try_err = "warn"
-# unneeded_field_pattern = "warn"
-# unused_result_ok = "warn"
-# verbose_file_reads = "warn"
-
-# cast_lossless = "allow"
-# cast_possible_truncation = "allow"
-# cast_precision_loss = "allow"
-# float_cmp = "allow"
-# redundant_closure_for_method_calls = "allow"
-# similar_names = "allow"
-# too_many_lines = "allow"
-# uninlined_format_args = "allow"
-# unreadable_literal = "allow"
-
-# [lints.rust]
-# ambiguous_negative_literals = "warn"
-# non_ascii_idents = "warn"

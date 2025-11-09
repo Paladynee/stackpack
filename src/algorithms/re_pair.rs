@@ -6,38 +6,16 @@ use std::{
     hash::{DefaultHasher, Hasher},
 };
 
-use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
+use anyhow::Result;
 
-#[derive(Clone)]
-pub struct RePair {
-    pub debug: bool,
-}
+use crate::{algorithms::DynCompressor, compressor::DecompressionError};
 
-impl Compressor for RePair {
-    fn compress_bytes(&mut self, data: &[u8]) -> Vec<u8> {
-        self.repair_encode(data)
-    }
+pub const RePair: DynCompressor = DynCompressor {
+    compress: repair_encode,
+    decompress: repair_decode,
+};
 
-    fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        self.repair_decode(data)
-    }
-}
-
-impl Display for RePair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Recursive Pairing")
-    }
-}
-
-impl CompressorExt for RePair {
-    fn aliases(&self) -> &'static [&'static str] {
-        &["repair", "re_pair", "recursive_pairing"]
-    }
-
-    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
-        Box::new(Self { debug: false })
-    }
-}
+pub use self::RePair as ThisCompressor;
 
 /// when any value of this type is <= 255, it stores a value as-is.
 /// otherwise, it points to another entry in the grammar, using itself as an index.
@@ -69,32 +47,20 @@ pub struct Grammar {
     inner: Vec<u32>,
 }
 
-impl RePair {
-    pub fn repair_encode(&mut self, data: &[u8]) -> Vec<u8> {
-        let initial_values = (0u32..=255u32).collect::<Vec<_>>();
-        let mut grammar = Grammar { inner: initial_values };
-        let mut charlist = data.iter().map(|&byte| Symbol::Short(u32::from(byte))).collect::<Vec<_>>();
-        let mut frequencies: HashMap<&[Symbol], usize> = HashMap::new();
+pub fn repair_encode(data: &[u8], buf: &mut Vec<u8>) {
+    let initial_values = (0u32..=255u32).collect::<Vec<_>>();
+    let mut grammar = Grammar { inner: initial_values };
+    let mut charlist = data.iter().map(|&byte| Symbol::Short(u32::from(byte))).collect::<Vec<_>>();
+    let mut frequencies: HashMap<&[Symbol], usize> = HashMap::new();
 
-        for window in charlist.windows(2) {
-            let entry = frequencies.entry(window).or_insert(0);
-            *entry += 1;
-        }
-
-        todo!()
+    for window in charlist.windows(2) {
+        let entry = frequencies.entry(window).or_insert(0);
+        *entry += 1;
     }
 
-    pub fn repair_decode(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        todo!("{:?}", data.to_vec());
-    }
+    todo!()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn roundtrip_tests() {
-        crate::tests::roundtrip_test(RePair { debug: false });
-    }
+pub fn repair_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+    todo!("{:?}", data.to_vec());
 }

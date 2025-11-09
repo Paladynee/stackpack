@@ -104,361 +104,233 @@
 //!     "pipeline_name1 -> pipeline_name2 -> ... -> pipeline_nameN"
 //! the order of pipelines is specified in encoding order, meaning that when encoding, "pipeline_name1" is applied first,
 //! followed by "pipeline_name2", and so on.
-#![allow(unused)] //todo
-use clap::{Args, Parser, Subcommand};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::io;
+pub mod corpus;
+pub mod decode;
+pub mod encode;
+pub mod pipeline;
+pub mod test;
+
 use std::path::PathBuf;
-use std::str::FromStr;
-use thiserror::Error;
 
-use crate::algorithms;
-use crate::algorithms::pipeline::CompressionPipeline;
-use crate::compressor::Compressor;
-use crate::compressor::CompressorExt;
+use clap::{Args, Parser, Subcommand};
 
-/// Error types for CLI operations
-#[derive(Debug, Error)]
-pub enum CliError {
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("Pipeline error: {0}")]
-    Pipeline(String),
-
-    #[error("Invalid pipeline format: {0}")]
-    PipelineFormat(String),
-
-    #[error("Unknown preset: {0}")]
-    UnknownPreset(String),
-
-    #[error("Unknown algorithm: {0}")]
-    UnknownAlgorithm(String),
-
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
-}
-
-type Result<T> = std::result::Result<T, CliError>;
-
-/// CLI arguments for the stackpack application
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+/// Top-level CLI entry point for stackpack.
+#[derive(Debug, Parser)]
+#[command(
+	name = "stackpack",
+	author,
+	version,
+	about = "A compressor-agnostic compression pipeline CLI.",
+	long_about = None,
+	disable_help_subcommand = true
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
 }
 
-/// Supported commands for stackpack
-#[derive(Subcommand, Debug)]
+/// Supported stackpack subcommands.
+#[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Encode (compress) a file or folder
-    #[command(alias = "enc")]
+    #[command(name = "enc", about = "Compress input data using a pipeline.")]
     Encode(EncodeArgs),
-
-    /// Decode (decompress) a file or folder
-    #[command(alias = "dec")]
+    #[command(name = "dec", about = "Decompress data produced by stackpack.")]
     Decode(DecodeArgs),
-
-    /// Test compression/decompression roundtrip
+    #[command(name = "test", about = "Round-trip pipelines against input data.")]
     Test(TestArgs),
-
-    /// Pipeline management commands
-    Pipeline {
-        #[command(subcommand)]
-        command: PipelineCommand,
-    },
+    #[command(name = "pipeline", about = "Inspect or manage available pipelines.", subcommand)]
+    Pipeline(PipelineCommand),
+    #[command(name = "corpus", about = "Run corpus compression benchmarks.")]
+    Corpus(CorpusArgs),
 }
 
-/// Arguments specific to the encode command
-#[derive(Args, Debug)]
-pub struct EncodeArgs {
-    /// Path to the input file or folder
-    pub input_path: PathBuf,
-
-    /// Path for the output file or folder
-    pub output_path: PathBuf,
-
-    /// Specify pipeline as a string (e.g. "bwt -> mtf -> rle -> arcode")
-    #[arg(long)]
-    pub using: Option<String>,
-
-    /// Load pipeline from a JSON file
-    #[arg(long)]
+/// Common selectors for pipeline inputs.
+#[derive(Debug, Args, Clone, Default)]
+pub struct PipelineSelector {
+    #[arg(
+		long = "using",
+		value_name = "PIPELINE",
+		conflicts_with_all = ["from_file", "preset"],
+		help = "Inline pipeline description, e.g. \"bwt -> mtf -> arcode\"."
+	)]
+    pub inline: Option<String>,
+    #[arg(
+		long = "from_file",
+		value_name = "PIPELINE_FILE",
+		conflicts_with_all = ["inline", "preset"],
+		help = "Path to a JSON pipeline definition file."
+	)]
     pub from_file: Option<PathBuf>,
-
-    /// Embed pipeline information in the output file
-    #[arg(long)]
-    pub embed_to_file: bool,
-
-    /// Use a predefined pipeline preset
-    #[arg(long)]
+    #[arg(
+		long = "preset",
+		value_name = "PRESET",
+		conflicts_with_all = ["inline", "from_file"],
+		help = "Preset pipelines registered by stackpack."
+	)]
     pub preset: Option<String>,
+}
 
-    /// Output raw compressed data without additional metadata
-    #[arg(long)]
+impl PipelineSelector {
+    /// Resolve to a concrete pipeline selection, defaulting when no option is provided.
+    #[allow(dead_code)]
+    pub fn selection(&self) -> PipelineSelection {
+        if let Some(inline) = &self.inline {
+            PipelineSelection::Inline(inline.clone())
+        } else if let Some(path) = &self.from_file {
+            PipelineSelection::FromFile(path.clone())
+        } else if let Some(preset) = &self.preset {
+            PipelineSelection::Preset(preset.clone())
+        } else {
+            PipelineSelection::Default
+        }
+    }
+}
+
+/// Where the pipeline description should be sourced from.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PipelineSelection {
+    Inline(String),
+    FromFile(PathBuf),
+    Preset(String),
+    Default,
+}
+
+/// Packaged pipeline persistence strategy.
+#[derive(Debug, Args, Clone, Copy, Default)]
+pub struct PipelinePersistenceArgs {
+    #[arg(
+        long = "embed_to_file",
+        conflicts_with = "raw",
+        help = "Embed the pipeline metadata directly in the output artifact."
+    )]
+    pub embed_to_file: bool,
+    #[arg(
+        long,
+        conflicts_with = "embed_to_file",
+        help = "Do not store pipeline metadata alongside the compressed output."
+    )]
     pub raw: bool,
 }
 
-/// Arguments specific to the decode command
-#[derive(Args, Debug)]
+impl PipelinePersistenceArgs {
+    #[allow(dead_code)]
+    pub fn mode(&self) -> PipelinePersistence {
+        if self.embed_to_file {
+            PipelinePersistence::Embedded
+        } else if self.raw {
+            PipelinePersistence::Raw
+        } else {
+            PipelinePersistence::Sidecar
+        }
+    }
+}
+
+/// Encoding-time storage mode for pipeline metadata.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PipelinePersistence {
+    Sidecar,
+    Embedded,
+    Raw,
+}
+
+/// CLI arguments for the `enc` subcommand.
+#[derive(Debug, Args, Clone)]
+pub struct EncodeArgs {
+    #[arg(value_name = "INPUT", help = "Path to the file or directory to compress.")]
+    pub input: PathBuf,
+    #[arg(value_name = "OUTPUT", help = "Destination path for the compressed output.")]
+    pub output: PathBuf,
+    #[command(flatten)]
+    pub pipeline: PipelineSelector,
+    #[command(flatten)]
+    pub persistence: PipelinePersistenceArgs,
+}
+
+impl EncodeArgs {
+    #[allow(dead_code)]
+    pub fn pipeline_selection(&self) -> PipelineSelection {
+        self.pipeline.selection()
+    }
+
+    #[allow(dead_code)]
+    pub fn persistence_mode(&self) -> PipelinePersistence {
+        self.persistence.mode()
+    }
+}
+
+/// CLI arguments for the `dec` subcommand.
+#[derive(Debug, Args, Clone)]
 pub struct DecodeArgs {
-    /// Path to the input file or folder
-    pub input_path: PathBuf,
-
-    /// Path for the output file or folder
-    pub output_path: PathBuf,
-
-    /// Specify pipeline as a string (e.g. "bwt -> mtf -> rle -> arcode")
-    #[arg(long)]
-    pub using: Option<String>,
-
-    /// Load pipeline from a JSON file
-    #[arg(long)]
-    pub from_file: Option<PathBuf>,
-
-    /// Use a predefined pipeline preset
-    #[arg(long)]
-    pub preset: Option<String>,
-
-    /// Try brute force pipeline detection up to specified depth
-    #[arg(long)]
-    pub try_brute: Option<u32>,
+    #[arg(value_name = "INPUT", help = "Path to the file or directory to decompress.")]
+    pub input: PathBuf,
+    #[arg(value_name = "OUTPUT", help = "Destination path for the decompressed data.")]
+    pub output: PathBuf,
+    #[command(flatten)]
+    pub pipeline: PipelineSelector,
+    #[arg(
+		long = "try-brute",
+		value_name = "DEPTH",
+		value_parser = parse_positive_depth,
+		help = "Attempt brute-force decompression up to the provided pipeline depth."
+	)]
+    pub brute_force_depth: Option<usize>,
 }
 
-/// Arguments specific to the test command
-#[derive(Args, Debug)]
+impl DecodeArgs {
+    #[allow(dead_code)]
+    pub fn pipeline_selection(&self) -> PipelineSelection {
+        self.pipeline.selection()
+    }
+}
+
+/// CLI arguments for the `test` subcommand.
+#[derive(Debug, Args, Clone)]
 pub struct TestArgs {
-    /// Path to the original file or folder
-    pub input_path: PathBuf,
-
-    /// Path for the roundtrip output file or folder
-    pub output_path: PathBuf,
-
-    /// Specify pipeline as a string (e.g. "bwt -> mtf -> rle -> arcode")
-    #[arg(long)]
-    pub using: Option<String>,
-
-    /// Load pipeline from a JSON file
-    #[arg(long)]
-    pub from_file: Option<PathBuf>,
-
-    /// Use a predefined pipeline preset
-    #[arg(long)]
-    pub preset: Option<String>,
+    #[arg(value_name = "INPUT", help = "Path to the file or directory to exercise.")]
+    pub input: PathBuf,
+    #[arg(value_name = "OUTPUT", help = "Directory for round-trip artifacts.")]
+    pub output: PathBuf,
+    #[command(flatten)]
+    pub pipeline: PipelineSelector,
 }
 
-/// Pipeline management subcommands
-#[derive(Subcommand, Debug)]
+impl TestArgs {
+    #[allow(dead_code)]
+    pub fn pipeline_selection(&self) -> PipelineSelection {
+        self.pipeline.selection()
+    }
+}
+
+/// CLI arguments for the `corpus` subcommand.
+#[derive(Debug, Args, Clone)]
+pub struct CorpusArgs {}
+
+impl CorpusArgs {}
+
+/// Pipeline inspection and management subcommands.
+#[derive(Debug, Subcommand)]
 pub enum PipelineCommand {
-    /// List available compression algorithms
+    #[command(name = "list-compressors", about = "List available compressors.")]
     ListCompressors {
-        /// Show detailed information about each compressor
-        #[arg(long)]
+        #[arg(long, help = "Print additional metadata for each compressor.")]
         detailed: bool,
     },
-
-    /// Save a pipeline configuration to a file
+    #[command(name = "save-to-file", about = "Persist a pipeline string to a JSON file.")]
     SaveToFile {
-        /// Pipeline string (e.g. "bwt -> mtf -> rle -> arcode")
+        #[arg(value_name = "PIPELINE", help = "Pipeline string in \"a -> b -> c\" form.")]
         pipeline: String,
-
-        /// Output file path
-        output_path: PathBuf,
+        #[arg(value_name = "OUTPUT", help = "Output path for the JSON pipeline file.")]
+        output: PathBuf,
     },
 }
 
-/// Serializable pipeline configuration
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PipelineConfig {
-    /// Names of algorithms in the pipeline
-    pub algorithms: Vec<String>,
-
-    /// Optional algorithm-specific parameters
-    #[serde(default)]
-    pub parameters: Vec<serde_json::Value>,
-
-    /// Version information
-    pub version: String,
-}
-
-/// Pipeline preset configurations
-pub struct PipelinePresets;
-
-impl PipelinePresets {
-    /// Get a pipeline configuration from a preset name
-    pub fn get_preset(name: &str) -> Result<PipelineConfig> {
-        match name {
-            "o1" => Ok(PipelineConfig {
-                algorithms: vec!["bwt".to_string(), "mtf".to_string(), "rle".to_string(), "arcode".to_string()],
-                parameters: Vec::new(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            }),
-            "fast" => Ok(PipelineConfig {
-                algorithms: vec!["rle".to_string(), "arcode".to_string()],
-                parameters: Vec::new(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            }),
-            "text" => Ok(PipelineConfig {
-                algorithms: vec!["bwt".to_string(), "mtf".to_string(), "arcode".to_string()],
-                parameters: Vec::new(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            }),
-            _ => Err(CliError::UnknownPreset(name.to_string())),
-        }
+fn parse_positive_depth(raw: &str) -> Result<usize, String> {
+    let depth: usize = raw.parse().map_err(|err| format!("failed to parse depth '{raw}': {err}"))?;
+    if depth == 0 {
+        Err("depth must be greater than zero".to_string())
+    } else {
+        Ok(depth)
     }
-}
-
-/// Pipeline string parser
-pub struct PipelineParser;
-
-impl PipelineParser {
-    /// Parse a pipeline string into a PipelineConfig
-    pub fn parse(pipeline_str: &str) -> Result<PipelineConfig> {
-        let parts: Vec<&str> = pipeline_str.split("->").map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-
-        if parts.is_empty() {
-            return Err(CliError::PipelineFormat("Empty pipeline string".to_string()));
-        }
-
-        Ok(PipelineConfig {
-            algorithms: parts.iter().map(|s| s.to_string()).collect(),
-            parameters: Vec::new(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-        })
-    }
-}
-
-/// Algorithm parser
-pub struct AlgorithmParser;
-
-impl AlgorithmParser {
-    /// Parse a single algorithm from its short name or long name.
-    pub fn parse(name: &str) -> Result<Box<dyn CompressorExt>> {
-        for algo in algorithms::all() {
-            for alias in algo.aliases() {
-                if &name == alias {
-                    return Ok(algo.dyn_clone());
-                }
-            }
-        }
-
-        Err(CliError::UnknownAlgorithm(name.to_string()))
-    }
-}
-
-/// Pipeline builder
-pub struct PipelineBuilder;
-
-impl PipelineBuilder {
-    /// Build a pipeline from a PipelineConfig
-    pub fn build_pipeline(config: &PipelineConfig) -> Result<CompressionPipeline> {
-        let mut pipeline = CompressionPipeline::new();
-
-        for algo_name in &config.algorithms {
-            match algo_name.as_str() {
-                "lol" => {}
-                // TODO: Implement algorithm factory based on name
-                // This should create and add appropriate algorithms to the pipeline
-                _ => return Err(CliError::UnknownAlgorithm(algo_name.clone())),
-            }
-        }
-
-        Ok(pipeline)
-    }
-
-    /// Build a pipeline from various sources with priority:
-    /// 1. Direct pipeline string (--using)
-    /// 2. Pipeline file (--from_file)
-    /// 3. Preset (--preset)
-    /// 4. Default pipeline
-    pub fn build_from_args(using: Option<&str>, from_file: Option<&PathBuf>, preset: Option<&str>) -> Result<CompressionPipeline> {
-        // TODO: Implement pipeline building logic based on input priority
-        todo!("Implement pipeline building from arguments")
-    }
-}
-
-/// File format handler for compression output
-pub struct FileFormatHandler;
-
-impl FileFormatHandler {
-    /// Wrap compressed data with metadata if needed
-    pub fn wrap_compressed_data(data: Vec<u8>, config: &PipelineConfig, embed_to_file: bool) -> Result<Vec<u8>> {
-        if embed_to_file {
-            // TODO: Implement embedding pipeline metadata into the file
-            todo!("Implement metadata embedding")
-        } else {
-            Ok(data)
-        }
-    }
-
-    /// Extract pipeline configuration from compressed file
-    pub fn extract_pipeline_config(data: &[u8]) -> Result<Option<PipelineConfig>> {
-        // TODO: Implement pipeline extraction from file metadata
-        todo!("Implement pipeline extraction from file")
-    }
-
-    /// Save pipeline configuration to a separate file
-    pub fn save_pipeline_config(config: &PipelineConfig, base_path: &PathBuf) -> Result<()> {
-        let mut config_path = base_path.clone();
-        let file_name = config_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| CliError::Io(io::Error::new(io::ErrorKind::InvalidInput, "Invalid output path")))?;
-
-        config_path.set_file_name(format!("{}.pipeline.json", file_name));
-
-        let json = serde_json::to_string_pretty(config)?;
-        fs::write(config_path, json)?;
-
-        Ok(())
-    }
-}
-
-/// Command execution functions
-pub fn execute_command(cli: Cli) -> Result<()> {
-    match cli.command {
-        Command::Encode(args) => execute_encode(args),
-        Command::Decode(args) => execute_decode(args),
-        Command::Test(args) => execute_test(args),
-        Command::Pipeline { command } => execute_pipeline_command(command),
-    }
-}
-
-fn execute_encode(args: EncodeArgs) -> Result<()> {
-    // TODO: Implement encode command execution
-    todo!("Implement encode command")
-}
-
-fn execute_decode(args: DecodeArgs) -> Result<()> {
-    // TODO: Implement decode command execution
-    todo!("Implement decode command")
-}
-
-fn execute_test(args: TestArgs) -> Result<()> {
-    // TODO: Implement test command execution
-    todo!("Implement test command")
-}
-
-fn execute_pipeline_command(cmd: PipelineCommand) -> Result<()> {
-    match cmd {
-        PipelineCommand::ListCompressors { detailed } => {
-            // TODO: Implement listing compressors
-            todo!("Implement list-compressors command")
-        }
-        PipelineCommand::SaveToFile { pipeline, output_path } => {
-            let config = PipelineParser::parse(&pipeline)?;
-            let json = serde_json::to_string_pretty(&config)?;
-            fs::write(output_path, json)?;
-            Ok(())
-        }
-    }
-}
-
-/// Function to parse CLI arguments and execute appropriate command
-pub fn run() -> Result<()> {
-    let cli = Cli::parse();
-    execute_command(cli)
 }

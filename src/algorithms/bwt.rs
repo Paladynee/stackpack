@@ -1,152 +1,285 @@
-use core::cmp::Ordering;
-use std::fmt::Display;
+use crate::algorithms::DynCompressor;
+use anyhow::{Result, anyhow};
+use libsais::{BwtConstruction, ThreadCount, bwt::Bwt as LibsaisBwt, suffix_array::ExtraSpace, typestate::OwnedBuffer};
 
-use anyhow::anyhow;
-
-use crate::compressor::{Compressor, CompressorExt, DecompressionError, Result};
-
-#[derive(Clone)]
-pub struct Bwt;
-
-fn cmp_rotations(data: &[u8], i: usize, j: usize) -> Ordering {
-    let len = data.len();
-    for k in 0..len {
-        let a = data[(i + k) % len];
-        let b = data[(j + k) % len];
-        if a != b {
-            return a.cmp(&b);
-        }
-    }
-    Ordering::Equal
+if_tracing! {
+    use tracing::{debug, info};
 }
 
-impl Compressor for Bwt {
-    fn compress_bytes(&mut self, data: &[u8]) -> Vec<u8> {
-        self.bwt_encode(data)
-    }
+pub const Bwt: DynCompressor = DynCompressor {
+    compress: bwt_encode,
+    decompress: bwt_decode,
+};
 
-    fn decompress_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        self.bwt_decode(data)
-            .map_err(|e| anyhow!(DecompressionError::InvalidInput(format!("bwt decoder error: {}", e))))
+pub use self::Bwt as ThisCompressor;
+
+fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) {
+    let use_fixed_threads = data.len() > 1_000_000;
+    if_tracing! {
+        debug!(target = "bwt", input_len = data.len(), use_fixed_threads, "bwt encode selecting thread strategy");
     }
+    let res = BwtConstruction::for_text(data)
+        .with_owned_temporary_array_buffer_and_extra_space32(ExtraSpace::Recommended)
+        .multi_threaded(if use_fixed_threads {
+            ThreadCount::fixed(12)
+        } else {
+            ThreadCount::openmp_default()
+        })
+        .run()
+        .unwrap();
+
+    buf.clear();
+    let primary_index = res.primary_index();
+    let primary_index = u32::try_from(primary_index).expect("primary index must fit into u32");
+    let bwt_slice = res.bwt();
+    if_tracing! {
+        debug!(target = "bwt", primary_index, bwt_len = bwt_slice.len(), "bwt encode libsais complete");
+    }
+    buf.extend_from_slice(&primary_index.to_le_bytes());
+    buf.extend_from_slice(bwt_slice);
 }
 
-impl Display for Bwt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Burrows-Wheeler Transform")
+fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+    if_tracing! {
+        debug!(target = "bwt", input_len = data.len(), "bwt decode start");
     }
+
+    if data.len() < 4 {
+        buf.clear();
+        buf.extend_from_slice(data);
+        return Ok(());
+    }
+
+    let mut index_bytes = [0u8; 4];
+    index_bytes.copy_from_slice(&data[..4]);
+    let primary_index = u32::from_le_bytes(index_bytes) as usize;
+    let bwt_payload = &data[4..];
+
+    if bwt_payload.is_empty() {
+        buf.clear();
+        return Ok(());
+    }
+
+    if primary_index >= bwt_payload.len() {
+        return Err(anyhow!("Invalid primary index: {} (bwt length: {})", primary_index, bwt_payload.len()));
+    }
+
+    if_tracing! {
+        debug!(target = "bwt", primary_index, payload_len = bwt_payload.len(), "bwt decode parsed header");
+    }
+
+    buf.clear();
+    buf.resize(bwt_payload.len(), 0);
+    let bwt_owned = bwt_payload.to_vec();
+
+    // SAFETY: the BWT payload and the validated primary index originate from our own encoder,
+    // so they follow the libsais BWT conventions.
+    let builder = unsafe { LibsaisBwt::<u8, OwnedBuffer>::from_parts(bwt_owned, primary_index) }
+        .unbwt()
+        .in_borrowed_text_buffer(buf.as_mut_slice())
+        .with_owned_temporary_array_buffer32();
+
+    let use_fixed_threads = bwt_payload.len() > 1_000_000;
+    if_tracing! {
+        debug!(target = "bwt", payload_len = bwt_payload.len(), use_fixed_threads, "bwt decode selecting thread strategy");
+    }
+    let result = if use_fixed_threads {
+        builder.multi_threaded(ThreadCount::fixed(12)).run()
+    } else {
+        builder.multi_threaded(ThreadCount::openmp_default()).run()
+    };
+
+    result.map_err(|err| anyhow!("libsais unbwt failed: {:?}", err))?;
+
+    if_tracing! {
+        info!(target = "bwt", output_len = buf.len(), "bwt decode complete");
+    }
+
+    Ok(())
 }
 
-impl CompressorExt for Bwt {
-    fn aliases(&self) -> &'static [&'static str] {
-        &["bwt", "burrows", "burrows_wheeler_transform"]
-    }
+// /// Build a circular suffix array using the doubling algorithm.
+// /// This avoids the pathological behavior of comparing full rotations
+// /// for each comparison and is much faster on repetitive inputs.
+// fn build_circular_suffix_array(data: &[u8]) -> Vec<usize> {
+//     let n = data.len();
+//     let mut sa: Vec<usize> = (0..n).collect();
+//     // initial ranks = byte values
+//     let mut rank: Vec<usize> = data.iter().map(|&b| b as usize).collect();
+//     let mut tmp_rank = vec![0usize; n];
+//     let mut k = 1usize;
 
-    fn dyn_clone(&self) -> Box<dyn CompressorExt> {
-        Box::new(Self {})
-    }
-}
+//     while k < n {
+//         // sort sa by (rank[i], rank[i+k]) pair
+//         sa.sort_by(|&i, &j| {
+//             let ri = rank[i];
+//             let rj = rank[j];
+//             if ri != rj {
+//                 ri.cmp(&rj)
+//             } else {
+//                 let ri2 = rank[(i + k) % n];
+//                 let rj2 = rank[(j + k) % n];
+//                 ri2.cmp(&rj2)
+//             }
+//         });
 
-impl Bwt {
-    fn bwt_encode(&mut self, data: &[u8]) -> Vec<u8> {
-        // If the input is too short, just return the original data.
-        if data.len() < 4 {
-            return data.to_vec();
-        }
+//         tmp_rank[sa[0]] = 0;
+//         for idx in 1..n {
+//             let prev = sa[idx - 1];
+//             let cur = sa[idx];
+//             let prev_pair = (rank[prev], rank[(prev + k) % n]);
+//             let cur_pair = (rank[cur], rank[(cur + k) % n]);
+//             tmp_rank[cur] = tmp_rank[prev] + if cur_pair == prev_pair { 0 } else { 1 };
+//         }
 
-        // If input is too large, return original data
-        if data.len() > u32::MAX as usize {
-            return data.to_vec();
-        }
+//         rank.copy_from_slice(&tmp_rank);
 
-        let n = data.len();
-        // Create a vector of rotation starting indices.
-        let mut rotations: Vec<usize> = (0..n).collect();
+//         // early exit if all ranks are unique
+//         if rank[sa[n - 1]] == n - 1 {
+//             break;
+//         }
 
-        // Sort rotations lexicographically using our custom comparator.
-        rotations.sort_by(|&i, &j| cmp_rotations(data, i, j));
+//         k <<= 1;
+//     }
 
-        // Find the index of the original string (rotation starting at 0)
-        let orig_index = rotations.iter().position(|&i| i == 0).expect("Rotation starting at 0 must exist");
+//     sa
+// }
 
-        // Build the transformed output with enough capacity for both index bytes and transformed data
-        let mut output = Vec::with_capacity(4 + n);
+// fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) {
+//     if_tracing! {
+//         debug!(target = "bwt", input_len = data.len(), "bwt encode start");
+//     }
 
-        // Write the original index (as 4 bytes, little-endian) directly
-        output.extend_from_slice(&(orig_index as u32).to_le_bytes());
+//     // If the input is too short, just return the original data.
+//     if data.len() < 4 {
+//         if_tracing! {
+//             debug!(target = "bwt", input_len = data.len(), "bwt encode passthrough: input too short");
+//         }
+//         buf.clear();
+//         buf.extend_from_slice(data);
+//         return;
+//     }
 
-        // Append the last column of each rotation directly to the output
-        for &rot in &rotations {
-            let last_char = data[(rot + n - 1) % n];
-            output.push(last_char);
-        }
+//     // If input is too large, return original data
+//     if data.len() > u32::MAX as usize {
+//         if_tracing! {
+//             warn!(target = "bwt", input_len = data.len(), "bwt encode passthrough: input too large");
+//         }
+//         buf.clear();
+//         buf.extend_from_slice(data);
+//         return;
+//     }
 
-        output
-    }
+//     let n = data.len();
 
-    #[allow(clippy::missing_asserts_for_indexing)]
-    fn bwt_decode(&mut self, data: &[u8]) -> Result<Vec<u8>, String> {
-        // return the original data if the input is shorter than 4 bytes
-        if data.len() < 4 {
-            return Ok(data.to_vec());
-        }
+//     // Fast path: if all bytes equal, the BWT is trivial.
+//     if data.iter().all(|&b| b == data[0]) {
+//         let mut output = Vec::with_capacity(4 + n);
+//         output.extend_from_slice(&0u32.to_le_bytes());
+//         // last column is same as input
+//         output.extend_from_slice(data);
+//         buf.clear();
+//         buf.extend_from_slice(&output);
+//         if_tracing! {
+//             info!(target = "bwt", input_len = n, output_len = buf.len(), orig_index = 0, "bwt encode fast-path: all bytes equal");
+//         }
+//         return;
+//     }
 
-        // Read the original index (first 4 bytes, little-endian).
-        let orig_index = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
-        let bwt_transformed = &data[4..];
-        let n = bwt_transformed.len();
+//     // Build circular suffix array using doubling algorithm (O(n log n) behaviour with small constants).
+//     let sa = build_circular_suffix_array(data);
 
-        // If there's no actual data after the index, return empty
-        if n == 0 {
-            return Ok(Vec::new());
-        }
+//     // Find the index of the original string (rotation starting at 0)
+//     let orig_index = sa.iter().position(|&i| i == 0).expect("Rotation starting at 0 must exist");
 
-        // Validate that orig_index is within bounds
-        if orig_index >= n {
-            return Err(format!("Invalid original index: {} (data length: {})", orig_index, n));
-        }
+//     // Build the transformed output with enough capacity for both index bytes and transformed data
+//     let mut output = Vec::with_capacity(4 + n);
+//     output.extend_from_slice(&(orig_index as u32).to_le_bytes());
+//     for &rot in &sa {
+//         let last_char = data[(rot + n - 1) % n];
+//         output.push(last_char);
+//     }
 
-        // Build the frequency table for each byte.
-        let mut freq = [0usize; 256];
-        for &byte in bwt_transformed {
-            freq[byte as usize] += 1;
-        }
+//     buf.clear();
+//     buf.extend_from_slice(&output);
 
-        // Compute the starting position for each byte in the sorted first column.
-        let mut starts = [0usize; 256];
-        let mut sum = 0;
-        for b in 0..256 {
-            starts[b] = sum;
-            sum += freq[b];
-        }
+//     if_tracing! {
+//         info!(target = "bwt", input_len = n, output_len = output.len(), orig_index, "bwt encode complete");
+//     }
+// }
 
-        // Build the LF-mapping: lf[i] gives the next row in the reconstruction.
-        let mut lf = vec![0usize; n];
-        let mut seen = [0usize; 256];
-        for (i, &byte) in bwt_transformed.iter().enumerate() {
-            lf[i] = starts[byte as usize] + seen[byte as usize];
-            seen[byte as usize] += 1;
-        }
+// fn bwt_decode(data_slice: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+//     if_tracing! {
+//         debug!(target = "bwt", input_len = data_slice.len(), "bwt decode start");
+//     }
 
-        // Reconstruct the original string using the LF mapping.
-        let mut result = vec![0u8; n];
-        let mut row = orig_index;
-        // Reconstruct in reverse order.
-        for byte in result.iter_mut().rev() {
-            *byte = bwt_transformed[row];
-            row = lf[row];
-        }
+//     // return the original data if the input is shorter than 4 bytes
+//     if data_slice.len() < 4 {
+//         if_tracing! {
+//             debug!(target = "bwt", input_len = data_slice.len(), "bwt decode passthrough: input too short");
+//         }
+//         buf.clear();
+//         buf.extend_from_slice(data_slice);
+//         return Ok(());
+//     }
 
-        Ok(result)
-    }
-}
+//     // Read the original index (first 4 bytes, little-endian).
+//     let orig_index = u32::from_le_bytes([data_slice[0], data_slice[1], data_slice[2], data_slice[3]]) as usize;
+//     let bwt_transformed = &data_slice[4..];
+//     let n = bwt_transformed.len();
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+//     // If there's no actual data after the index, return empty
+//     if n == 0 {
+//         if_tracing! {
+//             debug!(target = "bwt", "bwt decode passthrough: no payload after index");
+//         }
+//         buf.clear();
+//         return Ok(());
+//     }
 
-    #[test]
-    fn roundtrip_tests() {
-        crate::tests::roundtrip_test(Bwt);
-    }
-}
+//     // Validate that orig_index is within bounds
+//     if orig_index >= n {
+//         if_tracing! {
+//             warn!(target = "bwt", orig_index, data_len = n, "bwt decode error: invalid original index");
+//         }
+//         return Err(anyhow!("Invalid original index: {} (data length: {})", orig_index, n));
+//     }
+
+//     // Build the frequency table for each byte.
+//     let mut freq = [0usize; 256];
+//     for &byte in bwt_transformed {
+//         freq[byte as usize] += 1;
+//     }
+
+//     // Compute the starting position for each byte in the sorted first column.
+//     let mut starts = [0usize; 256];
+//     let mut sum = 0;
+//     for b in 0..256 {
+//         starts[b] = sum;
+//         sum += freq[b];
+//     }
+
+//     // Build the LF-mapping: lf[i] gives the next row in the reconstruction.
+//     let mut lf = vec![0usize; n];
+//     let mut seen = [0usize; 256];
+//     for (i, &byte) in bwt_transformed.iter().enumerate() {
+//         lf[i] = starts[byte as usize] + seen[byte as usize];
+//         seen[byte as usize] += 1;
+//     }
+
+//     // Reconstruct the original string using the LF mapping.
+//     let mut result = vec![0u8; n];
+//     let mut row = orig_index;
+//     // Reconstruct in reverse order.
+//     for byte in result.iter_mut().rev() {
+//         *byte = bwt_transformed[row];
+//         row = lf[row];
+//     }
+
+//     buf.clear();
+//     buf.extend_from_slice(&result);
+//     if_tracing! {
+//         info!(target = "bwt", output_len = result.len(), orig_index, "bwt decode complete");
+//     }
+//     Ok(())
+// }
