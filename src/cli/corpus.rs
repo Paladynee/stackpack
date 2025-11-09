@@ -1,15 +1,15 @@
 use std::{fs, path::Path, time::Duration};
 
+use anyhow::Result;
 use voxell_timer::time_fn;
 use walkdir::WalkDir;
 
 use crate::{
-    algorithms::pipeline::CompressionPipeline,
     cli::{CorpusArgs, pipeline},
-    compressor::Compressor,
+    mutator::Mutator,
 };
 
-pub fn corpus(args: CorpusArgs) {
+pub fn corpus(_args: CorpusArgs) {
     let input_dir = "./test_data";
     for entry in WalkDir::new(input_dir)
         .into_iter()
@@ -21,11 +21,11 @@ pub fn corpus(args: CorpusArgs) {
 
         let input = fs::read(path).unwrap();
         let mut compressed = Vec::new();
-        let ((), comp_dur) = time_fn(|| pipeline.compress_bytes(&input, &mut compressed));
+        let (res, comp_dur) = time_fn(|| pipeline.drive_mutation(&input, &mut compressed));
 
         let mut decompressed = Vec::new();
-        let (_, decomp_dur) = time_fn(|| pipeline.decompress_bytes(&compressed, &mut decompressed));
-        validate_and_print_results(path, &input[..], &compressed[..], &decompressed[..], comp_dur, decomp_dur);
+        let (_, decomp_dur) = time_fn(|| pipeline.revert_mutation(&compressed, &mut decompressed));
+        validate_and_print_results(res, path, &input[..], &compressed[..], &decompressed[..], comp_dur, decomp_dur);
     }
 }
 
@@ -46,6 +46,7 @@ fn save_failed_equality_results_to_file(expected: &[u8], got: &[u8], path: &Path
 }
 
 fn validate_and_print_results(
+    res: Result<()>,
     path: &Path,
     expected: &[u8],
     intermediate: &[u8],
@@ -71,13 +72,15 @@ fn validate_and_print_results(
         (bytes_saved as f64) / (original_size as f64) * 100.0
     };
 
-    let passed = if equality { "PASSED" } else { "FAILED" };
+    let passed = equality && res.is_ok();
+
+    let passed_string = if passed { "PASSED" } else { "FAILED" };
     if !equality {
         save_failed_equality_results_to_file(expected, got, path);
     }
     eprintln!(
         "======== {} {} ========\n\t{:.0?} encode\n\t{:.0?} decode\n\toriginal: {} bytes\n\tcompressed: {} bytes\n\tdecompressed: {} bytes\n\tratio: {:.1}% (compressed/original)\n\tsaved: {:+} bytes ({:+.1}%)\n\t{}",
-        passed,
+        passed_string,
         path.display(),
         compression_time,
         decompression_time,
@@ -87,10 +90,15 @@ fn validate_and_print_results(
         ratio * 100.0,
         bytes_saved,
         percent_saved,
-        if !equality {
-            "\n\tfaulty binaries saved in current working directory"
+        if !passed {
+            format!(
+                "error: {}\nsee {}.expected.bin and {}.got.bin for details",
+                res.unwrap_err(),
+                path.file_name().unwrap().to_str().unwrap(),
+                path.file_name().unwrap().to_str().unwrap()
+            )
         } else {
-            ""
+            String::new()
         }
     );
 }

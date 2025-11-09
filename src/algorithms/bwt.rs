@@ -1,4 +1,4 @@
-use crate::algorithms::DynCompressor;
+use crate::algorithms::DynMutator;
 use anyhow::{Result, anyhow};
 use libsais::{BwtConstruction, ThreadCount, bwt::Bwt as LibsaisBwt, suffix_array::ExtraSpace, typestate::OwnedBuffer};
 
@@ -6,14 +6,14 @@ if_tracing! {
     use tracing::{debug, info};
 }
 
-pub const Bwt: DynCompressor = DynCompressor {
-    compress: bwt_encode,
-    decompress: bwt_decode,
+pub const Bwt: DynMutator = DynMutator {
+    drive_mutation: bwt_encode,
+    revert_mutation: bwt_decode,
 };
 
-pub use self::Bwt as ThisCompressor;
+pub use self::Bwt as ThisMutator;
 
-fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) {
+fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     let use_fixed_threads = data.len() > 1_000_000;
     if_tracing! {
         debug!(target = "bwt", input_len = data.len(), use_fixed_threads, "bwt encode selecting thread strategy");
@@ -37,6 +37,8 @@ fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) {
     }
     buf.extend_from_slice(&primary_index.to_le_bytes());
     buf.extend_from_slice(bwt_slice);
+
+    Ok(())
 }
 
 fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
@@ -72,8 +74,8 @@ fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     buf.resize(bwt_payload.len(), 0);
     let bwt_owned = bwt_payload.to_vec();
 
-    // SAFETY: the BWT payload and the validated primary index originate from our own encoder,
-    // so they follow the libsais BWT conventions.
+    // SAFETY: the primary index has been validated against the BWT payload, so they hopefully
+    // follow the libsais BWT conventions or this is UB.
     let builder = unsafe { LibsaisBwt::<u8, OwnedBuffer>::from_parts(bwt_owned, primary_index) }
         .unbwt()
         .in_borrowed_text_buffer(buf.as_mut_slice())

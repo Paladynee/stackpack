@@ -1,5 +1,10 @@
 use crate::{
-    algorithms::{arcode::ArithmeticCoding, bwt::Bwt, mtf::Mtf, pipeline::CompressionPipeline},
+    algorithms::{
+        arcode::ArithmeticCoding,
+        bwt::Bwt,
+        mtf::Mtf,
+        pipeline::{CompressionPipeline, get_specific_compressor_from_name},
+    },
     cli::{PipelineCommand, PipelineSelection},
 };
 
@@ -23,16 +28,25 @@ pub fn get_preset(s: &str) -> Option<fn() -> CompressionPipeline> {
 pub fn build_pipeline(selection: PipelineSelection) -> CompressionPipeline {
     match selection {
         PipelineSelection::Inline(string) => {
-            if_tracing! {
-                tracing::info!(event = "using_inline_pipeline", "using inline pipeline: {}", string);
-            };
-            default_pipeline()
+            let parts = string.split("->").map(|s| s.trim()).collect::<Vec<_>>();
+
+            let mut pipeline = CompressionPipeline::new();
+
+            for part in parts {
+                if let Some(comp) = get_specific_compressor_from_name(part) {
+                    pipeline.push_algorithm(comp);
+                } else {
+                    if_tracing! {
+                        tracing::error!(event = "unknown_algorithm", algorithm = %part, "unknown algorithm specified in inline pipeline, skipping");
+                    }
+                    panic!()
+                }
+            }
+
+            todo!()
         }
-        PipelineSelection::FromFile(path) => {
-            if_tracing! {
-                tracing::info!(event = "using_file_pipeline", "using pipeline from file: {}", path.display());
-            };
-            default_pipeline()
+        PipelineSelection::FromFile(_path) => {
+            todo!()
         }
         PipelineSelection::Preset(preset_name) => match get_preset(&preset_name) {
             Some(t) => t(),
@@ -42,4 +56,6 @@ pub fn build_pipeline(selection: PipelineSelection) -> CompressionPipeline {
     }
 }
 
-pub fn pipeline(args: PipelineCommand) {}
+pub fn pipeline(_args: PipelineCommand) {
+    todo!()
+}

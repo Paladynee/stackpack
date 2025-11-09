@@ -8,14 +8,14 @@ use std::{
 
 use anyhow::Result;
 
-use crate::{algorithms::DynCompressor, compressor::DecompressionError};
+use crate::algorithms::DynMutator;
 
-pub const RePair: DynCompressor = DynCompressor {
-    compress: repair_encode,
-    decompress: repair_decode,
+pub const RePair: DynMutator = DynMutator {
+    drive_mutation: repair_encode,
+    revert_mutation: repair_decode,
 };
 
-pub use self::RePair as ThisCompressor;
+pub use self::RePair as ThisMutator;
 
 /// when any value of this type is <= 255, it stores a value as-is.
 /// otherwise, it points to another entry in the grammar, using itself as an index.
@@ -47,7 +47,7 @@ pub struct Grammar {
     inner: Vec<u32>,
 }
 
-pub fn repair_encode(data: &[u8], buf: &mut Vec<u8>) {
+pub fn repair_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     let initial_values = (0u32..=255u32).collect::<Vec<_>>();
     let mut grammar = Grammar { inner: initial_values };
     let mut charlist = data.iter().map(|&byte| Symbol::Short(u32::from(byte))).collect::<Vec<_>>();

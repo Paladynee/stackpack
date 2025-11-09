@@ -1,9 +1,9 @@
 use crate::{
-    algorithms::DynCompressor,
-    compressor::{Compressor, Result},
+    algorithms::DynMutator,
+    mutator::{Mutator, Result},
 };
 use core::mem;
-use std::{fmt::Debug, time::Duration};
+use std::fmt::Debug;
 use voxell_timer::time_fn;
 
 if_tracing! {
@@ -12,7 +12,7 @@ if_tracing! {
 
 #[derive(Debug)]
 pub struct CompressionPipeline {
-    pipeline: Vec<DynCompressor>,
+    pipeline: Vec<DynMutator>,
 }
 
 impl CompressionPipeline {
@@ -20,33 +20,31 @@ impl CompressionPipeline {
         Self { pipeline: vec![] }
     }
 
-    pub fn push_algorithm(&mut self, algorithm: DynCompressor) {
+    pub fn push_algorithm(&mut self, algorithm: DynMutator) {
         self.pipeline.push(algorithm);
     }
 
     /// Chain this method to add multiple algorithms in a shorter way.
-    pub fn with_algorithm(mut self, algorithm: DynCompressor) -> Self {
+    pub fn with_algorithm(mut self, algorithm: DynMutator) -> Self {
         self.pipeline.push(algorithm);
         self
     }
 }
 
-impl Compressor for CompressionPipeline {
-    fn compress_bytes(&mut self, data: &[u8], buf: &mut Vec<u8>) {
+impl Mutator for CompressionPipeline {
+    fn drive_mutation(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         if_tracing! {
             let pipeline_span = span!(Level::INFO, "compression_pipeline", stages = self.pipeline.len());
             let _enter = pipeline_span.enter();
         }
-
         match self.pipeline.len() {
-            0 => {}
-            1 => self.pipeline[0].compress_bytes(data, buf),
+            0 => Ok(()),
+            1 => self.pipeline[0].drive_mutation(data, buf),
             n => {
                 let mut intermediate: Vec<u8> = vec![];
                 // first algorithm compresses from data to buf
-                let ((), d) = time_fn(|| self.pipeline[0].compress_bytes(data, buf));
-                let mut stage_times: Vec<Duration> = Vec::with_capacity(n);
-                stage_times.push(d);
+                let (res, d) = time_fn(|| self.pipeline[0].drive_mutation(data, buf));
+                res?;
                 if_tracing! {
                     tracing::info!(stage = 0, elapsed_ms = %d.as_micros(), out_len = buf.len(), "stage complete");
                 }
@@ -56,8 +54,8 @@ impl Compressor for CompressionPipeline {
                     let mut ref2 = &mut intermediate;
 
                     for algo in self.pipeline.iter_mut().skip(1) {
-                        let ((), d) = time_fn(|| algo.compress_bytes(ref1, ref2));
-                        stage_times.push(d);
+                        let (res, d) = time_fn(|| algo.drive_mutation(ref1, ref2));
+                        res?;
                         if_tracing! {
                             tracing::info!(elapsed_ms = %d.as_micros(), out_len = ref2.len(), "stage complete");
                         }
@@ -65,24 +63,19 @@ impl Compressor for CompressionPipeline {
                         // swap the references around (this is so cool)
                         mem::swap(&mut ref1, &mut ref2);
                     }
-                    // If the env var STACKPACK_STAGE_TIMINGS is set, print per-stage durations.
-                    if std::env::var("STACKPACK_STAGE_TIMINGS").is_ok() {
-                        eprintln!("Compression pipeline stage timings (ms):");
-                        for (i, t) in stage_times.iter().enumerate() {
-                            eprintln!("  stage {}: {:.3}", i, t.as_secs_f64() * 1000.0);
-                        }
-                    }
                 }
 
                 // write intermediate into buf if it was not the last buffer to get written
                 if n % 2 == 0 {
                     mem::swap(buf, &mut intermediate);
-                }
+                };
+
+                Ok(())
             }
         }
     }
 
-    fn decompress_bytes(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
+    fn revert_mutation(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         if_tracing! {
             let pipeline_span = span!(Level::INFO, "decompression_pipeline", stages = self.pipeline.len());
             let _enter = pipeline_span.enter();
@@ -90,15 +83,15 @@ impl Compressor for CompressionPipeline {
 
         match self.pipeline.len() {
             0 => Ok(()),
-            1 => self.pipeline[0].decompress_bytes(data, buf),
+            1 => self.pipeline[0].revert_mutation(data, buf),
             n => {
                 let mut intermediate: Vec<u8> = vec![];
 
                 // first algorithm decompresses from data to buf
-                let (r0, d0) = time_fn(|| self.pipeline[n - 1].decompress_bytes(data, buf));
-                r0?;
+                let (res, dur) = time_fn(|| self.pipeline[n - 1].revert_mutation(data, buf));
+                res?;
                 if_tracing! {
-                    tracing::info!(stage = n - 1, elapsed_ms = %d0.as_micros(), out_len = buf.len(), "stage complete");
+                    tracing::info!(stage = n - 1, elapsed_ms = %dur.as_micros(), out_len = buf.len(), "stage complete");
                 }
 
                 'run_algos: {
@@ -106,10 +99,10 @@ impl Compressor for CompressionPipeline {
                     let mut ref2 = &mut intermediate;
 
                     for algo in self.pipeline.iter_mut().rev().skip(1) {
-                        let (r, d) = time_fn(|| algo.decompress_bytes(ref1, ref2));
-                        r?;
+                        let (res, dur) = time_fn(|| algo.revert_mutation(ref1, ref2));
+                        res?;
                         if_tracing! {
-                            tracing::info!(elapsed_ms = %d.as_micros(), out_len = ref2.len(), "stage complete");
+                            tracing::info!(elapsed_ms = %dur.as_micros(), out_len = ref2.len(), "stage complete");
                         }
 
                         // swap the references around (this is so cool)
@@ -126,4 +119,14 @@ impl Compressor for CompressionPipeline {
             }
         }
     }
+}
+
+pub fn get_specific_compressor_from_name(s: &str) -> Option<DynMutator> {
+    for comp in crate::algorithms::ALL_COMPRESSORS.iter() {
+        if comp.name == s {
+            return Some(comp.mutator);
+        }
+    }
+
+    None
 }

@@ -1,15 +1,15 @@
-use crate::{algorithms::DynCompressor, compressor::Result};
+use crate::{algorithms::DynMutator, mutator::Result};
 
 if_tracing! {
     use tracing::{debug, info};
 }
 
-pub const Mtf: DynCompressor = DynCompressor {
-    compress: mtf_encode,
-    decompress: mtf_decode,
+pub const Mtf: DynMutator = DynMutator {
+    drive_mutation: mtf_encode,
+    revert_mutation: mtf_decode,
 };
 
-pub use self::Mtf as ThisCompressor;
+pub use self::Mtf as ThisMutator;
 
 macro_rules! iota {
     ($ty:ty; $size:expr) => {
@@ -25,7 +25,7 @@ macro_rules! iota {
     };
 }
 
-pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) {
+pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     if_tracing! {
         debug!(target = "mtf", input_len = data.len(), "mtf encode start");
     }
@@ -33,7 +33,7 @@ pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) {
         if_tracing! {
             debug!(target = "mtf", "mtf encode passthrough: input empty");
         }
-        return;
+        return Ok(());
     }
 
     buf.clear();
@@ -66,6 +66,8 @@ pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) {
     if_tracing! {
         info!(target = "mtf", input_len = data.len(), output_len = buf.len(), "mtf encode complete");
     }
+
+    Ok(())
 }
 
 pub fn mtf_decode(encoded: &[u8], buf: &mut Vec<u8>) -> Result<()> {

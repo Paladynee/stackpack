@@ -3,9 +3,8 @@ use std::fs;
 use voxell_timer::time_fn;
 
 use crate::{
-    algorithms::pipeline::CompressionPipeline,
     cli::{DecodeArgs, pipeline},
-    compressor::Compressor,
+    mutator::Mutator,
 };
 
 pub fn decode(args: DecodeArgs) {
@@ -17,7 +16,7 @@ pub fn decode(args: DecodeArgs) {
     let mut decompressed_data = Vec::new();
     let ((), decomp_dur) = time_fn(|| {
         pipeline
-            .decompress_bytes(&compressed_data, &mut decompressed_data)
+            .revert_mutation(&compressed_data, &mut decompressed_data)
             .expect("Decompression failed")
     });
     if_tracing! {

@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::Cursor};
+use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use arcode::{
@@ -6,28 +6,25 @@ use arcode::{
     bitbit::{BitReader, BitWriter, MSB},
 };
 
-use crate::{
-    algorithms::DynCompressor,
-    compressor::{Compressor, DecompressionError},
-};
+use crate::algorithms::DynMutator;
 
 if_tracing! {
     use tracing::{debug, error, info, warn};
 }
 
 const ARCODE_PRECISION: u64 = 48;
-pub const ArithmeticCoding: DynCompressor = DynCompressor {
-    compress: arith_encode,
-    decompress: arith_decode,
+pub const ArithmeticCoding: DynMutator = DynMutator {
+    drive_mutation: arith_encode,
+    revert_mutation: arith_decode,
 };
 
-pub use self::ArithmeticCoding as ThisCompressor;
+pub use self::ArithmeticCoding as ThisMutator;
 
 fn get_model() -> Model {
     Model::builder().num_symbols(256).eof(arcode::EOFKind::EndAddOne).build()
 }
 
-fn arith_encode(data: &[u8], buf: &mut Vec<u8>) {
+fn arith_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     if_tracing! {
         debug!(target = "arcode", input_len = data.len(), precision = ARCODE_PRECISION, "arcode encode start");
     }
@@ -56,6 +53,7 @@ fn arith_encode(data: &[u8], buf: &mut Vec<u8>) {
     if_tracing! {
         info!(target = "arcode", input_len = data.len(), output_len = buf.len(), precision = ARCODE_PRECISION, "arcode encode complete");
     }
+    Ok(())
 }
 
 fn encode_data_with_model(data: &[u8], model: &mut Model, buf: &mut Vec<u8>, precision: u64) -> Result<(), String> {
@@ -120,9 +118,7 @@ fn arith_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         if_tracing! {
             warn!(target = "arcode", "arcode decode error: input empty");
         }
-        return Err(anyhow!(DecompressionError::InvalidInput(
-            "arithmetic decoder error: data was empty".to_string()
-        )));
+        return Err(anyhow!("arithmetic decoder error: data was empty".to_string()));
     }
 
     let mut model = get_model();
@@ -134,12 +130,7 @@ fn arith_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         }
     }
 
-    let mapped = decode_result.map_err(|e| {
-        anyhow!(DecompressionError::InvalidInput(format!(
-            "arithmetic decoder error from arcode crate: {}",
-            e
-        )))
-    });
+    let mapped = decode_result.map_err(|e| anyhow!("arithmetic decoder error from arcode crate: {}", e));
 
     if_tracing! {
         if mapped.is_ok() {

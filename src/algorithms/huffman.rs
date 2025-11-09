@@ -4,15 +4,15 @@ use std::fmt::Display;
 //todo
 use anyhow::{Result, anyhow};
 
-use crate::{algorithms::DynCompressor, compressor::DecompressionError};
-pub const Huffman: DynCompressor = DynCompressor {
-    compress: huffman_encode,
-    decompress: huffman_decode,
+use crate::algorithms::DynMutator;
+pub const Huffman: DynMutator = DynMutator {
+    drive_mutation: huffman_encode,
+    revert_mutation: huffman_decode,
 };
 
-pub use self::Huffman as ThisCompressor;
+pub use self::Huffman as ThisMutator;
 
-pub fn huffman_encode(_data: &[u8], buf: &mut Vec<u8>) {
+pub fn huffman_encode(_data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     todo!("Huffman coding is currently unimplemented")
 }
 
