@@ -1,0 +1,1 @@
+Hello, Entropy! This is a short data string to test small inputs. It has little repetition, but it should still be handled correctly.
