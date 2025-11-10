@@ -6,24 +6,27 @@ use arcode::{
     bitbit::{BitReader, BitWriter, MSB},
 };
 
-use crate::algorithms::DynMutator;
+use crate::{algorithms::DynMutator, registered::RegisteredCompressor};
 
 if_tracing! {
     use tracing::{debug, error, info, warn};
 }
 
-const ARCODE_PRECISION: u64 = 48;
-pub const ArithmeticCoding: DynMutator = DynMutator {
-    drive_mutation: arith_encode,
-    revert_mutation: arith_decode,
-};
-
-pub use self::ArithmeticCoding as ThisMutator;
+pub const ArithmeticCoding: RegisteredCompressor = RegisteredCompressor::new_dyn(
+    DynMutator {
+        drive_mutation: arith_encode,
+        revert_mutation: arith_decode,
+    },
+    "arcode",
+    Some(DESCRIPTION),
+);
+const DESCRIPTION: &str = "Arithmetic coding";
 
 fn get_model() -> Model {
     Model::builder().num_symbols(256).eof(arcode::EOFKind::EndAddOne).build()
 }
 
+const ARCODE_PRECISION: u64 = 48;
 fn arith_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     if_tracing! {
         debug!(target = "arcode", input_len = data.len(), precision = ARCODE_PRECISION, "arcode encode start");

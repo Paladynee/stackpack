@@ -9,13 +9,19 @@ use std::{
 use anyhow::Result;
 
 use crate::algorithms::DynMutator;
+use crate::registered::RegisteredCompressor;
 
-pub const RePair: DynMutator = DynMutator {
-    drive_mutation: repair_encode,
-    revert_mutation: repair_decode,
-};
-
-pub use self::RePair as ThisMutator;
+pub const RePair: RegisteredCompressor = RegisteredCompressor::new_dyn(
+    DynMutator {
+        drive_mutation: repair_encode,
+        revert_mutation: repair_decode,
+    },
+    "re_pair",
+    Some(DESCRIPTION),
+);
+pub const DESCRIPTION: &str = "MR-RePair byte-pair encoding algorithm.
+Based on the paper MR-RePair: Grammar Compression based on Maximal Repeats
+https://arxiv.org/abs/1811.04596";
 
 /// when any value of this type is <= 255, it stores a value as-is.
 /// otherwise, it points to another entry in the grammar, using itself as an index.

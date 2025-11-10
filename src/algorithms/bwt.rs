@@ -1,4 +1,4 @@
-use crate::algorithms::DynMutator;
+use crate::{algorithms::DynMutator, registered::RegisteredCompressor};
 use anyhow::{Result, anyhow};
 use libsais::{BwtConstruction, ThreadCount, bwt::Bwt as LibsaisBwt, suffix_array::ExtraSpace, typestate::OwnedBuffer};
 
@@ -6,12 +6,15 @@ if_tracing! {
     use tracing::{debug, info};
 }
 
-pub const Bwt: DynMutator = DynMutator {
-    drive_mutation: bwt_encode,
-    revert_mutation: bwt_decode,
-};
-
-pub use self::Bwt as ThisMutator;
+pub const Bwt: RegisteredCompressor = RegisteredCompressor::new_dyn(
+    DynMutator {
+        drive_mutation: bwt_encode,
+        revert_mutation: bwt_decode,
+    },
+    "bwt",
+    Some(DESCRIPTION),
+);
+const DESCRIPTION: &str = "Burrows-wheeler transform provided by the libsais library by Ilya Grebnov.";
 
 fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     let use_fixed_threads = data.len() > 1_000_000;

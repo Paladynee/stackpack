@@ -13,7 +13,7 @@ if_tracing! {
 
 #[derive(Debug)]
 pub struct CompressionPipeline {
-    pipeline: Vec<DynMutator>,
+    pipeline: Vec<RegisteredCompressor>,
 }
 
 impl CompressionPipeline {
@@ -33,13 +33,13 @@ impl CompressionPipeline {
                 END_OF_ALGORITHM_NAME => {
                     let name = str::from_utf8(&bytes[start..index]).ok()?;
                     let algo = get_specific_compressor_from_name(name)?;
-                    pipeline.push_algorithm(algo.mutator);
+                    pipeline.push_algorithm(algo.clone());
                     start = index + 1;
                 }
                 END_OF_PIPELINE => {
                     let name = str::from_utf8(&bytes[start..index]).ok()?;
                     let algo = get_specific_compressor_from_name(name)?;
-                    pipeline.push_algorithm(algo.mutator);
+                    pipeline.push_algorithm(algo.clone());
                     return Some(pipeline);
                 }
                 _ => {}
@@ -50,12 +50,12 @@ impl CompressionPipeline {
         None
     }
 
-    pub fn push_algorithm(&mut self, algorithm: DynMutator) {
+    pub fn push_algorithm(&mut self, algorithm: RegisteredCompressor) {
         self.pipeline.push(algorithm);
     }
 
     /// Chain this method to add multiple algorithms in a shorter way.
-    pub fn with_algorithm(mut self, algorithm: DynMutator) -> Self {
+    pub fn with_algorithm(mut self, algorithm: RegisteredCompressor) -> Self {
         self.pipeline.push(algorithm);
         self
     }
@@ -151,8 +151,8 @@ impl Mutator for CompressionPipeline {
     }
 }
 
-pub fn get_specific_compressor_from_name(s: &str) -> Option<&RegisteredCompressor> {
-    ALL_COMPRESSORS.iter().find(|&comp| comp.name == s)
+pub fn get_specific_compressor_from_name(s: &str) -> Option<RegisteredCompressor> {
+    ALL_COMPRESSORS.lock().iter().find(|&comp| comp.name == s).cloned()
 }
 
 pub fn default_pipeline() -> CompressionPipeline {

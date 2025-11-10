@@ -3,6 +3,8 @@ use std::fs;
 use crate::{
     algorithms::pipeline::{CompressionPipeline, default_pipeline, get_preset, get_specific_compressor_from_name},
     cli::{PipelineCommand, PipelineSelection},
+    plugins::{FfiOption, LOADED_PLUGINS},
+    registered::ALL_COMPRESSORS,
 };
 
 pub fn build_pipeline(selection: PipelineSelection) -> CompressionPipeline {
@@ -14,12 +16,15 @@ pub fn build_pipeline(selection: PipelineSelection) -> CompressionPipeline {
 
             for part in parts {
                 if let Some(comp) = get_specific_compressor_from_name(part) {
-                    pipeline.push_algorithm(comp.mutator);
+                    pipeline.push_algorithm(comp.clone());
                 } else {
                     if_tracing! {
-                        tracing::error!(event = "unknown_algorithm", algorithm = %part, "unknown algorithm specified in inline pipeline, skipping");
+                        tracing::error!(event = "unknown_algorithm", algorithm = %part, "unknown algorithm specified in inline pipeline");
                     }
-                    panic!("unknown_algorithm")
+                    panic!(
+                        "unknown algorithm {:?}. you may have forgotten to enable plugins (unsafe), or not have the required plugins installed.",
+                        part
+                    );
                 }
             }
 
@@ -37,6 +42,32 @@ pub fn build_pipeline(selection: PipelineSelection) -> CompressionPipeline {
     }
 }
 
-pub fn pipeline(_args: PipelineCommand) {
-    todo!()
+pub fn pipeline(args: PipelineCommand) {
+    match args {
+        PipelineCommand::ListCompressors { detailed } => {
+            for algo in ALL_COMPRESSORS.lock().iter() {
+                if detailed && let Some(desc) = algo.short_description {
+                    println!("Name: {}\nDescription: {}\n", algo.name, desc);
+                } else {
+                    println!("{}", algo.name);
+                }
+            }
+        }
+        PipelineCommand::ListPlugins => {
+            let lock = LOADED_PLUGINS.lock();
+            for item in lock.iter() {
+                println!(
+                    "Plugin loaded from: {:?}\nName: {}{}\n",
+                    item.loaded_from,
+                    item.api.short_name,
+                    if let Some(desc) = item.api.description.as_option() {
+                        format!("\nDescription: {}", desc)
+                    } else {
+                        String::new()
+                    }
+                );
+            }
+        }
+        _ => todo!(),
+    }
 }

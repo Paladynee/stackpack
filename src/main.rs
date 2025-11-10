@@ -54,7 +54,9 @@ use clap::Parser;
 mod algorithms;
 mod cli;
 mod mutator;
+mod plugins;
 mod registered;
+mod units;
 
 fn main() {
     if_tracing! {
@@ -91,11 +93,27 @@ fn main() {
     }
 
     let cli = Cli::parse();
+
+    if cli.unsafe_mode {
+        cli::warn_unsafe_mode_enabled();
+        // SAFETY: user has explicitly opted in to unsafe mode,
+        // which may be unsound as plugins loaded at runtime can not be checked
+        // for safety.
+        unsafe { plugins::load_plugins() };
+    }
+
     match cli.command {
         Command::Encode(args) => cli::encode::encode(args),
         Command::Decode(args) => cli::decode::decode(args),
         Command::Test(args) => cli::test::test(args),
         Command::Corpus(args) => cli::corpus::corpus(args),
         Command::Pipeline(command) => cli::pipeline::pipeline(command),
+    };
+
+    if cli.unsafe_mode {
+        // SAFETY: user has explicitly opted in to unsafe mode,
+        // which may be unsound as plugins loaded at runtime can not be checked
+        // for safety.
+        unsafe { plugins::unload_plugins() };
     }
 }

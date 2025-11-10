@@ -1,15 +1,18 @@
-use crate::{algorithms::DynMutator, mutator::Result};
+use crate::{algorithms::DynMutator, mutator::Result, registered::RegisteredCompressor};
 
 if_tracing! {
     use tracing::{debug, info};
 }
 
-pub const Mtf: DynMutator = DynMutator {
-    drive_mutation: mtf_encode,
-    revert_mutation: mtf_decode,
-};
-
-pub use self::Mtf as ThisMutator;
+pub const Mtf: RegisteredCompressor = RegisteredCompressor::new_dyn(
+    DynMutator {
+        drive_mutation: mtf_encode,
+        revert_mutation: mtf_decode,
+    },
+    "mtf",
+    Some(DESCRIPTION),
+);
+const DESCRIPTION: &str = "Move-to-front transform. Useful after Burrows-Wheeler transform";
 
 macro_rules! iota {
     ($ty:ty; $size:expr) => {

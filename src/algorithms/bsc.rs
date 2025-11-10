@@ -1,6 +1,6 @@
 use core::ffi::c_int;
 
-use crate::algorithms::DynMutator;
+use crate::{algorithms::DynMutator, registered::RegisteredCompressor};
 use anyhow::{Result, anyhow};
 use bsc_m03_sys::{libbsc_compress_memory_block_u8, libbsc_decompress_memory_block_c};
 use core::mem::size_of;
@@ -19,12 +19,15 @@ macro_rules! cold {
     }};
 }
 
-pub const Bsc: DynMutator = DynMutator {
-    drive_mutation: bsc_encode,
-    revert_mutation: bsc_decode,
-};
-
-pub use self::Bsc as ThisMutator;
+pub const Bsc: RegisteredCompressor = RegisteredCompressor::new_dyn(
+    DynMutator {
+        drive_mutation: bsc_encode,
+        revert_mutation: bsc_decode,
+    },
+    "bsc",
+    Some(DESCRIPTION),
+);
+const DESCRIPTION: &str = "bsc-m03 general purpose compressor by Ilya Grebnov.";
 
 fn bsc_encode(mut data: &[u8], output: &mut Vec<u8>) -> Result<()> {
     if_tracing! {

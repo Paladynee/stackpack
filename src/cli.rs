@@ -23,7 +23,7 @@
 //! the next option reads the pipeline from a file, which allows the user to remember what pipeline was used to compress a file
 //! in a readable format, allows for fine-grained experimenting with the pipeline for optimal compression,
 //! and allows for sharing the pipeline with other users.
-//! > `$exename enc <path> <output path> --from_file pipeline.json`
+//! > `$exename enc <path> <output path> --from_file pipeline.stp`
 //!
 //! another option is to use preset pipelines which can be invoked with a much shorter command.
 //! > `$exename enc <path> <output path> --preset o1`
@@ -114,17 +114,18 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
-/// Top-level CLI entry point for stackpack.
 #[derive(Debug, Parser)]
 #[command(
-	name = "stackpack",
-	author,
-	version,
-	about = "A compressor-agnostic compression pipeline CLI.",
-	long_about = None,
-	disable_help_subcommand = true
+    name = "stackpack",
+    author,
+    version,
+    about = "A compressor-agnostic compression pipeline CLI.",
+    long_about = None,
+    disable_help_subcommand = true
 )]
 pub struct Cli {
+    #[arg(long = "unsafe", global = true, help = "Enable things which can't be checked for safety (plugins)")]
+    pub unsafe_mode: bool,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -234,9 +235,9 @@ pub enum PipelinePersistence {
 /// CLI arguments for the `enc` subcommand.
 #[derive(Debug, Args, Clone)]
 pub struct EncodeArgs {
-    #[arg(value_name = "INPUT", help = "Path to the file or directory to compress.")]
+    #[arg(value_name = "path/to/input", help = "Path to the file or directory to compress.")]
     pub input: PathBuf,
-    #[arg(value_name = "OUTPUT", help = "Destination path for the compressed output.")]
+    #[arg(value_name = "path/to/output", help = "Destination path for the compressed output.")]
     pub output: PathBuf,
     #[command(flatten)]
     pub pipeline: PipelineSelector,
@@ -257,15 +258,15 @@ impl EncodeArgs {
 /// CLI arguments for the `dec` subcommand.
 #[derive(Debug, Args, Clone)]
 pub struct DecodeArgs {
-    #[arg(value_name = "INPUT", help = "Path to the file or directory to decompress.")]
+    #[arg(value_name = "path/to/input", help = "Path to the file or directory to decompress.")]
     pub input: PathBuf,
-    #[arg(value_name = "OUTPUT", help = "Destination path for the decompressed data.")]
+    #[arg(value_name = "path/to/output", help = "Destination path for the decompressed data.")]
     pub output: PathBuf,
     #[command(flatten)]
     pub pipeline: PipelineSelector,
     #[arg(
 		long = "try-brute",
-		value_name = "DEPTH",
+		value_name = "depth",
 		value_parser = parse_positive_depth,
 		help = "Attempt brute-force decompression up to the provided pipeline depth."
 	)]
@@ -281,7 +282,7 @@ impl DecodeArgs {
 /// CLI arguments for the `test` subcommand.
 #[derive(Debug, Args, Clone)]
 pub struct TestArgs {
-    #[arg(value_name = "INPUT", help = "Path to the file or directory to exercise.")]
+    #[arg(value_name = "path/to/input", help = "Path to the file or directory to exercise.")]
     pub input: PathBuf,
     #[command(flatten)]
     pub pipeline: PipelineSelector,
@@ -314,11 +315,13 @@ pub enum PipelineCommand {
         #[arg(long, help = "Print additional metadata for each compressor.")]
         detailed: bool,
     },
-    #[command(name = "save-to-file", about = "Persist a pipeline string to a JSON file.")]
+    #[command(name = "list-plugins", about = "List available plugins.")]
+    ListPlugins,
+    #[command(name = "save-to-file", about = "Persist a pipeline string to a file.")]
     SaveToFile {
         #[arg(value_name = "PIPELINE", help = "Pipeline string in \"a -> b -> c\" form.")]
         pipeline: String,
-        #[arg(value_name = "OUTPUT", help = "Output path for the JSON pipeline file.")]
+        #[arg(value_name = "path/to/output", help = "Output path for the pipeline file.")]
         output: PathBuf,
     },
 }
@@ -330,4 +333,8 @@ fn parse_positive_depth(raw: &str) -> Result<usize, String> {
     } else {
         Ok(depth)
     }
+}
+
+pub fn warn_unsafe_mode_enabled() {
+    eprintln!("[warn] stackpack: unsafe mode enabled, safety is not guaranteed.");
 }
