@@ -13,6 +13,17 @@ macro_rules! if_tracing {
     };
 }
 
+#[macro_export]
+macro_rules! if_not_tracing {
+    {$($body:tt)*} => {
+        ::cfg_if::cfg_if! {
+            if #[cfg(not(feature = "tracing"))] {
+                $($body)*
+            }
+        }
+    };
+}
+
 extern crate anyhow;
 extern crate arcode;
 extern crate clap;
@@ -43,6 +54,7 @@ use clap::Parser;
 mod algorithms;
 mod cli;
 mod mutator;
+mod registered;
 
 fn main() {
     if_tracing! {
@@ -68,7 +80,7 @@ fn main() {
             std::env::var("RUST_LOG")
                 .ok()
                 .and_then(|s| parse_level(&s))
-                .unwrap_or(tracing::Level::ERROR)
+                .unwrap_or(tracing::Level::TRACE)
         };
 
         let subscriber = fmt()

@@ -1,8 +1,6 @@
-use crate::cli::{TestArgs, pipeline};
-use std::process;
+use crate::cli::{TestArgs, corpus::run_folder};
 
 pub fn test(args: TestArgs) {
-    let mut _pipeline = pipeline::build_pipeline(args.pipeline_selection());
-    eprintln!("the 'test' subcommand is not implemented yet");
-    process::exit(1);
+    run_folder(&args.input, args.pipeline_selection(), false);
 }
+

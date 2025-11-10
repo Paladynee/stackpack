@@ -1,9 +1,10 @@
 use crate::{
-    algorithms::DynMutator,
+    algorithms::{DynMutator, arcode::ArithmeticCoding, bsc::Bsc, bwt::Bwt, mtf::Mtf},
     mutator::{Mutator, Result},
+    registered::{ALL_COMPRESSORS, RegisteredCompressor},
 };
 use core::mem;
-use std::fmt::Debug;
+use core::{fmt::Debug, str};
 use voxell_timer::time_fn;
 
 if_tracing! {
@@ -18,6 +19,35 @@ pub struct CompressionPipeline {
 impl CompressionPipeline {
     pub const fn new() -> Self {
         Self { pipeline: vec![] }
+    }
+
+    pub fn try_from_bytes(bytes: &[u8]) -> Option<Self> {
+        const END_OF_PIPELINE: u8 = b'\0';
+        const END_OF_ALGORITHM_NAME: u8 = b',';
+        let mut pipeline = CompressionPipeline::new();
+        let mut start = 0;
+        let mut index = 0;
+        while index < bytes.len() {
+            let c = bytes[index];
+            match c {
+                END_OF_ALGORITHM_NAME => {
+                    let name = str::from_utf8(&bytes[start..index]).ok()?;
+                    let algo = get_specific_compressor_from_name(name)?;
+                    pipeline.push_algorithm(algo.mutator);
+                    start = index + 1;
+                }
+                END_OF_PIPELINE => {
+                    let name = str::from_utf8(&bytes[start..index]).ok()?;
+                    let algo = get_specific_compressor_from_name(name)?;
+                    pipeline.push_algorithm(algo.mutator);
+                    return Some(pipeline);
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+
+        None
     }
 
     pub fn push_algorithm(&mut self, algorithm: DynMutator) {
@@ -121,12 +151,28 @@ impl Mutator for CompressionPipeline {
     }
 }
 
-pub fn get_specific_compressor_from_name(s: &str) -> Option<DynMutator> {
-    for comp in crate::algorithms::ALL_COMPRESSORS.iter() {
-        if comp.name == s {
-            return Some(comp.mutator);
-        }
-    }
+pub fn get_specific_compressor_from_name(s: &str) -> Option<&RegisteredCompressor> {
+    ALL_COMPRESSORS.iter().find(|&comp| comp.name == s)
+}
 
-    None
+pub fn default_pipeline() -> CompressionPipeline {
+    if_tracing! {
+        tracing::info!(event = "using_default_pipeline", "using default compression pipeline");
+    };
+    CompressionPipeline::new()
+        .with_algorithm(Bwt)
+        .with_algorithm(Mtf)
+        .with_algorithm(ArithmeticCoding)
+}
+
+pub fn bsc() -> CompressionPipeline {
+    CompressionPipeline::new().with_algorithm(Bsc)
+}
+
+pub fn get_preset(s: &str) -> Option<fn() -> CompressionPipeline> {
+    Some(match s {
+        "default" => default_pipeline,
+        "bsc" => bsc,
+        _ => None?,
+    })
 }

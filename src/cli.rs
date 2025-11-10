@@ -132,9 +132,9 @@ pub struct Cli {
 /// Supported stackpack subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    #[command(name = "enc", about = "Compress input data using a pipeline.")]
+    #[command(name = "enc", aliases = ["e", "encode", "c", "compress", "a", "archive"], about = "Compress input data using a pipeline.")]
     Encode(EncodeArgs),
-    #[command(name = "dec", about = "Decompress data produced by stackpack.")]
+    #[command(name = "dec", aliases = ["d", "decode", "decompress", "u", "uncompress", "unpack"], about = "Decompress data produced by stackpack.")]
     Decode(DecodeArgs),
     #[command(name = "test", about = "Round-trip pipelines against input data.")]
     Test(TestArgs),
@@ -172,7 +172,6 @@ pub struct PipelineSelector {
 
 impl PipelineSelector {
     /// Resolve to a concrete pipeline selection, defaulting when no option is provided.
-    #[allow(dead_code)]
     pub fn selection(&self) -> PipelineSelection {
         if let Some(inline) = &self.inline {
             PipelineSelection::Inline(inline.clone())
@@ -187,7 +186,6 @@ impl PipelineSelector {
 }
 
 /// Where the pipeline description should be sourced from.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipelineSelection {
     Inline(String),
@@ -214,7 +212,6 @@ pub struct PipelinePersistenceArgs {
 }
 
 impl PipelinePersistenceArgs {
-    #[allow(dead_code)]
     pub fn mode(&self) -> PipelinePersistence {
         if self.embed_to_file {
             PipelinePersistence::Embedded
@@ -227,7 +224,6 @@ impl PipelinePersistenceArgs {
 }
 
 /// Encoding-time storage mode for pipeline metadata.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PipelinePersistence {
     Sidecar,
@@ -249,12 +245,10 @@ pub struct EncodeArgs {
 }
 
 impl EncodeArgs {
-    #[allow(dead_code)]
     pub fn pipeline_selection(&self) -> PipelineSelection {
         self.pipeline.selection()
     }
 
-    #[allow(dead_code)]
     pub fn persistence_mode(&self) -> PipelinePersistence {
         self.persistence.mode()
     }
@@ -279,7 +273,6 @@ pub struct DecodeArgs {
 }
 
 impl DecodeArgs {
-    #[allow(dead_code)]
     pub fn pipeline_selection(&self) -> PipelineSelection {
         self.pipeline.selection()
     }
@@ -290,14 +283,11 @@ impl DecodeArgs {
 pub struct TestArgs {
     #[arg(value_name = "INPUT", help = "Path to the file or directory to exercise.")]
     pub input: PathBuf,
-    #[arg(value_name = "OUTPUT", help = "Directory for round-trip artifacts.")]
-    pub output: PathBuf,
     #[command(flatten)]
     pub pipeline: PipelineSelector,
 }
 
 impl TestArgs {
-    #[allow(dead_code)]
     pub fn pipeline_selection(&self) -> PipelineSelection {
         self.pipeline.selection()
     }
@@ -305,9 +295,16 @@ impl TestArgs {
 
 /// CLI arguments for the `corpus` subcommand.
 #[derive(Debug, Args, Clone)]
-pub struct CorpusArgs {}
+pub struct CorpusArgs {
+    #[command(flatten)]
+    pub pipeline: PipelineSelector,
+}
 
-impl CorpusArgs {}
+impl CorpusArgs {
+    pub fn pipeline_selection(&self) -> PipelineSelection {
+        self.pipeline.selection()
+    }
+}
 
 /// Pipeline inspection and management subcommands.
 #[derive(Debug, Subcommand)]

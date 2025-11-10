@@ -32,6 +32,7 @@ voxell_rng = "0.5.0"
 voxell_timer = "1.2.2"
 
 walkdir = "2.5.0"
+bsc_m03_sys = { version = "0.1.0", path = "../bsc_m03_sys" }
 # no-panic = "0.1.35"
 
 [features]

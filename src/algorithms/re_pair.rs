@@ -1,8 +1,8 @@
 #![allow(unused)] //todo
 use core::fmt;
+use core::fmt::{Debug, Display};
 use std::{
     collections::HashMap,
-    fmt::{Debug, Display},
     hash::{DefaultHasher, Hasher},
 };
 
