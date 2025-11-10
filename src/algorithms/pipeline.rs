@@ -76,7 +76,7 @@ impl Mutator for CompressionPipeline {
                 let (res, d) = time_fn(|| self.pipeline[0].drive_mutation(data, buf));
                 res?;
                 if_tracing! {
-                    tracing::info!(stage = 0, elapsed_ms = %d.as_micros(), out_len = buf.len(), "stage complete");
+                    tracing::info!(stage = 0, elapsed = ?d, out_len = buf.len(), "stage complete");
                 }
 
                 'run_algos: {
@@ -87,7 +87,7 @@ impl Mutator for CompressionPipeline {
                         let (res, d) = time_fn(|| algo.drive_mutation(ref1, ref2));
                         res?;
                         if_tracing! {
-                            tracing::info!(elapsed_ms = %d.as_micros(), out_len = ref2.len(), "stage complete");
+                            tracing::info!(elapsed = ?d, out_len = ref2.len(), "stage complete");
                         }
 
                         // swap the references around (this is so cool)
@@ -121,7 +121,7 @@ impl Mutator for CompressionPipeline {
                 let (res, dur) = time_fn(|| self.pipeline[n - 1].revert_mutation(data, buf));
                 res?;
                 if_tracing! {
-                    tracing::info!(stage = n - 1, elapsed_ms = %dur.as_micros(), out_len = buf.len(), "stage complete");
+                    tracing::info!(stage = n - 1, elapsed_ms = ?dur, out_len = buf.len(), "stage complete");
                 }
 
                 'run_algos: {
@@ -132,7 +132,7 @@ impl Mutator for CompressionPipeline {
                         let (res, dur) = time_fn(|| algo.revert_mutation(ref1, ref2));
                         res?;
                         if_tracing! {
-                            tracing::info!(elapsed_ms = %dur.as_micros(), out_len = ref2.len(), "stage complete");
+                            tracing::info!(elapsed_ms = ?dur, out_len = ref2.len(), "stage complete");
                         }
 
                         // swap the references around (this is so cool)

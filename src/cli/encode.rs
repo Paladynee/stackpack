@@ -12,7 +12,7 @@ pub fn encode(args: EncodeArgs) {
     let mut compressed_data = Vec::new();
     let (res, comp_dur) = time_fn(|| pipeline.drive_mutation(&input_data, &mut compressed_data));
     if_tracing! {
-        tracing::info!(event = "encode_complete", input = %input_path.display(), output = %output_path.display(), elapsed_ms = %comp_dur.as_micros(), compressed_len = compressed_data.len(), "encode finished");
+        tracing::info!(event = "encode_complete", input = %input_path.display(), output = %output_path.display(), elapsed = ?comp_dur, compressed_len = compressed_data.len(), "encode finished");
     }
 
     if res.is_err() {

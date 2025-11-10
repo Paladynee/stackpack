@@ -20,7 +20,7 @@ pub fn decode(args: DecodeArgs) {
             .expect("Decompression failed")
     });
     if_tracing! {
-        tracing::info!(event = "decode_complete", input = %input_path.display(), output = %output_path.display(), elapsed_ms = %decomp_dur.as_micros(), decompressed_len = decompressed_data.len(), "decode finished");
+        tracing::info!(event = "decode_complete", input = %input_path.display(), output = %output_path.display(), elapsed_ms = ?decomp_dur, decompressed_len = decompressed_data.len(), "decode finished");
     }
     fs::write(output_path, decompressed_data).expect("Failed to write output file");
 }
