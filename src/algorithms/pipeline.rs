@@ -7,10 +7,6 @@ use core::mem;
 use core::{fmt::Debug, str};
 use voxell_timer::time_fn;
 
-if_tracing! {
-    use tracing::{Level, span};
-}
-
 #[derive(Debug)]
 pub struct CompressionPipeline {
     pipeline: Vec<RegisteredCompressor>,
@@ -64,7 +60,7 @@ impl CompressionPipeline {
 impl Mutator for CompressionPipeline {
     fn drive_mutation(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         if_tracing! {
-            let pipeline_span = span!(Level::INFO, "compression_pipeline", stages = self.pipeline.len());
+            let pipeline_span = tracing::span!(tracing::Level::INFO, "compression_pipeline", stages = self.pipeline.len());
             let _enter = pipeline_span.enter();
         }
         match self.pipeline.len() {
@@ -75,9 +71,9 @@ impl Mutator for CompressionPipeline {
                 // first algorithm compresses from data to buf
                 let (res, d) = time_fn(|| self.pipeline[0].drive_mutation(data, buf));
                 res?;
-                if_tracing! {
+                if_tracing! {{
                     tracing::info!(stage = 0, elapsed = ?d, out_len = buf.len(), "stage complete");
-                }
+                }}
 
                 'run_algos: {
                     let mut ref1 = &mut *buf;
@@ -86,9 +82,9 @@ impl Mutator for CompressionPipeline {
                     for algo in self.pipeline.iter_mut().skip(1) {
                         let (res, d) = time_fn(|| algo.drive_mutation(ref1, ref2));
                         res?;
-                        if_tracing! {
+                        if_tracing! {{
                             tracing::info!(elapsed = ?d, out_len = ref2.len(), "stage complete");
-                        }
+                        }}
 
                         // swap the references around (this is so cool)
                         mem::swap(&mut ref1, &mut ref2);
@@ -107,7 +103,7 @@ impl Mutator for CompressionPipeline {
 
     fn revert_mutation(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         if_tracing! {
-            let pipeline_span = span!(Level::INFO, "decompression_pipeline", stages = self.pipeline.len());
+            let pipeline_span = tracing::span!(tracing::Level::INFO, "decompression_pipeline", stages = self.pipeline.len());
             let _enter = pipeline_span.enter();
         }
 
@@ -120,9 +116,9 @@ impl Mutator for CompressionPipeline {
                 // first algorithm decompresses from data to buf
                 let (res, dur) = time_fn(|| self.pipeline[n - 1].revert_mutation(data, buf));
                 res?;
-                if_tracing! {
+                if_tracing! {{
                     tracing::info!(stage = n - 1, elapsed_ms = ?dur, out_len = buf.len(), "stage complete");
-                }
+                }}
 
                 'run_algos: {
                     let mut ref1 = &mut *buf;
@@ -131,9 +127,9 @@ impl Mutator for CompressionPipeline {
                     for algo in self.pipeline.iter_mut().rev().skip(1) {
                         let (res, dur) = time_fn(|| algo.revert_mutation(ref1, ref2));
                         res?;
-                        if_tracing! {
+                        if_tracing! {{
                             tracing::info!(elapsed_ms = ?dur, out_len = ref2.len(), "stage complete");
-                        }
+                        }}
 
                         // swap the references around (this is so cool)
                         mem::swap(&mut ref1, &mut ref2);
@@ -156,9 +152,9 @@ pub fn get_specific_compressor_from_name(s: &str) -> Option<RegisteredCompressor
 }
 
 pub fn default_pipeline() -> CompressionPipeline {
-    if_tracing! {
+    if_tracing! {{
         tracing::info!(event = "using_default_pipeline", "using default compression pipeline");
-    };
+    }};
     CompressionPipeline::new()
         .with_algorithm(Bwt)
         .with_algorithm(Mtf)

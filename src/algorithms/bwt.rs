@@ -2,10 +2,6 @@ use crate::{algorithms::DynMutator, registered::RegisteredCompressor};
 use anyhow::{Result, anyhow};
 use libsais::{BwtConstruction, ThreadCount, bwt::Bwt as LibsaisBwt, suffix_array::ExtraSpace, typestate::OwnedBuffer};
 
-if_tracing! {
-    use tracing::{debug, info};
-}
-
 pub const Bwt: RegisteredCompressor = RegisteredCompressor::new_dyn(
     DynMutator {
         drive_mutation: bwt_encode,
@@ -18,9 +14,9 @@ const DESCRIPTION: &str = "Burrows-wheeler transform provided by the libsais lib
 
 fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     let use_fixed_threads = data.len() > 1_000_000;
-    if_tracing! {
-        debug!(target = "bwt", input_len = data.len(), use_fixed_threads, "bwt encode selecting thread strategy");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "bwt", input_len = data.len(), use_fixed_threads, "bwt encode selecting thread strategy");
+    }}
     let res = BwtConstruction::for_text(data)
         .with_owned_temporary_array_buffer_and_extra_space32(ExtraSpace::Recommended)
         .multi_threaded(if use_fixed_threads {
@@ -35,9 +31,9 @@ fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
     let primary_index = res.primary_index();
     let primary_index = u32::try_from(primary_index).expect("primary index must fit into u32");
     let bwt_slice = res.bwt();
-    if_tracing! {
-        debug!(target = "bwt", primary_index, bwt_len = bwt_slice.len(), "bwt encode libsais complete");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "bwt", primary_index, bwt_len = bwt_slice.len(), "bwt encode libsais complete");
+    }}
     buf.extend_from_slice(&primary_index.to_le_bytes());
     buf.extend_from_slice(bwt_slice);
 
@@ -45,9 +41,9 @@ fn bwt_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
 }
 
 fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
-    if_tracing! {
-        debug!(target = "bwt", input_len = data.len(), "bwt decode start");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "bwt", input_len = data.len(), "bwt decode start");
+    }}
 
     if data.len() < 4 {
         buf.clear();
@@ -69,9 +65,9 @@ fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         return Err(anyhow!("Invalid primary index: {} (bwt length: {})", primary_index, bwt_payload.len()));
     }
 
-    if_tracing! {
-        debug!(target = "bwt", primary_index, payload_len = bwt_payload.len(), "bwt decode parsed header");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "bwt", primary_index, payload_len = bwt_payload.len(), "bwt decode parsed header");
+    }}
 
     buf.clear();
     buf.resize(bwt_payload.len(), 0);
@@ -85,9 +81,9 @@ fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         .with_owned_temporary_array_buffer32();
 
     let use_fixed_threads = bwt_payload.len() > 1_000_000;
-    if_tracing! {
-        debug!(target = "bwt", payload_len = bwt_payload.len(), use_fixed_threads, "bwt decode selecting thread strategy");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "bwt", payload_len = bwt_payload.len(), use_fixed_threads, "bwt decode selecting thread strategy");
+    }}
     let result = if use_fixed_threads {
         builder.multi_threaded(ThreadCount::fixed(12)).run()
     } else {
@@ -96,9 +92,9 @@ fn bwt_decode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
 
     result.map_err(|err| anyhow!("libsais unbwt failed: {:?}", err))?;
 
-    if_tracing! {
-        info!(target = "bwt", output_len = buf.len(), "bwt decode complete");
-    }
+    if_tracing! {{
+        tracing::info!(target = "bwt", output_len = buf.len(), "bwt decode complete");
+    }}
 
     Ok(())
 }

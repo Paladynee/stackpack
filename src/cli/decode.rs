@@ -1,6 +1,8 @@
 use std::fs;
 
-use voxell_timer::time_fn;
+if_tracing! {
+    use voxell_timer::time_fn;
+}
 
 use crate::{
     cli::{DecodeArgs, pipeline},
@@ -14,13 +16,18 @@ pub fn decode(args: DecodeArgs) {
 
     let compressed_data = fs::read(input_path).expect("Failed to read input file");
     let mut decompressed_data = Vec::new();
-    let ((), decomp_dur) = time_fn(|| {
+    if_tracing! {{
+        let ((), decomp_dur) = time_fn(|| {
+            pipeline
+                .revert_mutation(&compressed_data, &mut decompressed_data)
+                .expect("Decompression failed")
+        });
+        tracing::info!(event = "decode_complete", input = %input_path.display(), output = %output_path.display(), elapsed_ms = ?decomp_dur, decompressed_len = decompressed_data.len(), "decode finished");
+    }};
+    if_not_tracing! {{
         pipeline
             .revert_mutation(&compressed_data, &mut decompressed_data)
-            .expect("Decompression failed")
-    });
-    if_tracing! {
-        tracing::info!(event = "decode_complete", input = %input_path.display(), output = %output_path.display(), elapsed_ms = ?decomp_dur, decompressed_len = decompressed_data.len(), "decode finished");
-    }
+            .expect("Decompression failed");
+    }};
     fs::write(output_path, decompressed_data).expect("Failed to write output file");
 }

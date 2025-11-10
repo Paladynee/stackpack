@@ -57,7 +57,10 @@ impl Mutator for RegisteredCompressor {
             res
         }
         if_not_tracing! {
-            (self.mutator.drive_mutation)(data, buf)
+            match self.mutator {
+                EnumMutator::Dyn(m) => (m.drive_mutation)(data, buf),
+                EnumMutator::Ffi(ref mut m) => m.drive_mutation(data, buf),
+            }
         }
     }
 
@@ -73,7 +76,10 @@ impl Mutator for RegisteredCompressor {
             res
         }
         if_not_tracing! {
-            (self.mutator.revert_mutation)(data, buf)
+            match self.mutator {
+                EnumMutator::Dyn(m) => (m.revert_mutation)(data, buf),
+                EnumMutator::Ffi(ref mut m) => m.revert_mutation(data, buf),
+            }
         }
     }
 }

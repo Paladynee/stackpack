@@ -2,7 +2,32 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 
+extern crate anyhow;
+extern crate arcode;
+extern crate clap;
+extern crate libsais;
+// extern crate derive_fromstr;
+// extern crate lzw;
+// extern crate log;
+// extern crate no_panic;
+// extern crate serde;
+// extern crate serde_json;
+// extern crate thiserror;
+// extern crate voxell_rng;
+extern crate bsc_m03_sys;
+extern crate cfg_if;
+extern crate libloading;
+extern crate parking_lot;
+extern crate voxell_timer;
+extern crate walkdir;
+if_tracing! {
+    extern crate tracing;
+    extern crate tracing_log;
+    extern crate tracing_subscriber;
+}
+
 #[macro_export]
+#[doc(hidden)]
 macro_rules! if_tracing {
     {$($body:tt)*} => {
         ::cfg_if::cfg_if! {
@@ -14,6 +39,7 @@ macro_rules! if_tracing {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! if_not_tracing {
     {$($body:tt)*} => {
         ::cfg_if::cfg_if! {
@@ -22,30 +48,6 @@ macro_rules! if_not_tracing {
             }
         }
     };
-}
-
-extern crate anyhow;
-extern crate arcode;
-extern crate clap;
-// extern crate derive_fromstr;
-extern crate libsais;
-// extern crate lzw;
-// extern crate log;
-// extern crate no_panic;
-// extern crate serde;
-// extern crate serde_json;
-// extern crate thiserror;
-// extern crate voxell_rng;
-extern crate voxell_timer;
-extern crate walkdir;
-if_tracing! {
-    extern crate tracing;
-    extern crate tracing_log;
-    extern crate tracing_subscriber;
-}
-
-if_tracing! {
-    use tracing_subscriber::fmt;
 }
 
 use crate::cli::{Cli, Command};
@@ -85,7 +87,7 @@ fn main() {
                 .unwrap_or(tracing::Level::TRACE)
         };
 
-        let subscriber = fmt()
+        let subscriber = tracing_subscriber::fmt()
             .with_max_level(max_level)
             .with_target(false)
             .finish();

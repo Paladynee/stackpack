@@ -99,17 +99,18 @@ impl Plugin {
 
 pub static LOADED_PLUGINS: LazyLock<Mutex<Vec<Plugin>>> = LazyLock::new(|| Mutex::new(vec![]));
 
+
 pub unsafe fn load_plugins() {
-    if_tracing! {
+    if_tracing! {{
         tracing::trace!(event = "loading_plugins");
-    }
+    }}
 
     let path = match env::var_os("STACKPACK_PLUGINS_ROOT") {
         Some(t) => t,
         None => {
-            if_tracing! {
+            if_tracing! {{
                 tracing::info!(event = "no_plugins_path", "`STACKPACK_PLUGINS_ROOT` environment variable not set, skipping plugin loading");
-            };
+            }};
             return;
         }
     };
@@ -117,9 +118,9 @@ pub unsafe fn load_plugins() {
     let mut pathbuf = PathBuf::from(path);
     pathbuf.push("plugins");
 
-    if_tracing! {
+    if_tracing! {{
         tracing::debug!(event = "plugins", path = ?pathbuf.display(), "looking for plugins here");
-    };
+    }};
 
     for entry in WalkDir::new(&pathbuf)
         .max_depth(1)
@@ -136,9 +137,9 @@ pub unsafe fn load_plugins() {
                     let api = match unsafe { StackpackPluginAPI::from_library(&lib) } {
                         Ok(t) => t,
                         Err(e) => {
-                            if_tracing! {
+                            if_tracing! {{
                                 tracing::error!(event = "plugins", path = ?path.display(), error = ?e, "plugin does not conform to Stackpack Plugin API");
-                            };
+                            }};
                             eprintln!("[WARN] plugin at {} does not conform to Stackpack Plugin API: {:?}", path.display(), e);
                             continue;
                         }
@@ -147,14 +148,14 @@ pub unsafe fn load_plugins() {
                     let mut lock = LOADED_PLUGINS.lock();
                     lock.push(plug);
                     drop(lock);
-                    if_tracing! {
+                    if_tracing! {{
                         tracing::info!(event = "plugins", path = ?path.display(), "successfully loaded plugin");
-                    }
+                    }}
                 }
                 Err(e) => {
-                    if_tracing! {
+                    if_tracing! {{
                         tracing::error!(event = "plugins", path = ?path.display(), error = %e, "failed to load plugin");
-                    };
+                    }};
                     eprintln!("[WARN] failed to load plugin from {}: {}", path.display(), e);
                 }
             }
@@ -164,9 +165,9 @@ pub unsafe fn load_plugins() {
     {
         let mut registry_lock = ALL_COMPRESSORS.lock();
         for (index, plug) in LOADED_PLUGINS.lock().iter().enumerate() {
-            if_tracing! {
+            if_tracing! {{
                 tracing::debug!(event = "registry", index = index, name = plug.api.short_name, path = ?plug.loaded_from.display(), "registered compressor");
-            };
+            }};
 
             registry_lock.push(RegisteredCompressor::new_ffi(
                 FfiMutator { plugin_index: index },

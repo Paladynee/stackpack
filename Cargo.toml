@@ -30,7 +30,7 @@ tracing-log = { version = "0.2.0", optional = true }
 # tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 # derive_fromstr = "0.1"
-voxell_rng = "0.5.0"
+# voxell_rng = "0.5.0"
 voxell_timer = "1.2.2"
 bsc_m03_sys = "0.1.0"
 

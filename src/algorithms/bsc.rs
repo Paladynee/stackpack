@@ -5,10 +5,6 @@ use anyhow::{Result, anyhow};
 use bsc_m03_sys::{libbsc_compress_memory_block_u8, libbsc_decompress_memory_block_c};
 use core::mem::size_of;
 
-if_tracing! {
-    use tracing::{debug, error, info, warn};
-}
-
 macro_rules! cold {
     ($(captures: $($Cap:ident: $CapTy:ty)*,)? $($Body:block)* -> $Ty:ty) => {{
         #[cold]

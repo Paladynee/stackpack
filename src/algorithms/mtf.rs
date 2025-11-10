@@ -1,9 +1,5 @@
 use crate::{algorithms::DynMutator, mutator::Result, registered::RegisteredCompressor};
 
-if_tracing! {
-    use tracing::{debug, info};
-}
-
 pub const Mtf: RegisteredCompressor = RegisteredCompressor::new_dyn(
     DynMutator {
         drive_mutation: mtf_encode,
@@ -29,13 +25,13 @@ macro_rules! iota {
 }
 
 pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
-    if_tracing! {
-        debug!(target = "mtf", input_len = data.len(), "mtf encode start");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "mtf", input_len = data.len(), "mtf encode start");
+    }}
     if data.is_empty() {
-        if_tracing! {
-            debug!(target = "mtf", "mtf encode passthrough: input empty");
-        }
+        if_tracing! {{
+            tracing::debug!(target = "mtf", "mtf encode passthrough: input empty");
+        }}
         return Ok(());
     }
 
@@ -66,23 +62,23 @@ pub fn mtf_encode(data: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         pos[byte as usize] = 0;
     }
 
-    if_tracing! {
-        info!(target = "mtf", input_len = data.len(), output_len = buf.len(), "mtf encode complete");
-    }
+    if_tracing! {{
+        tracing::info!(target = "mtf", input_len = data.len(), output_len = buf.len(), "mtf encode complete");
+    }}
 
     Ok(())
 }
 
 pub fn mtf_decode(encoded: &[u8], buf: &mut Vec<u8>) -> Result<()> {
-    if_tracing! {
-        debug!(target = "mtf", input_len = encoded.len(), "mtf decode start");
-    }
+    if_tracing! {{
+        tracing::debug!(target = "mtf", input_len = encoded.len(), "mtf decode start");
+    }}
     // If input empty, nothing to do.
     if encoded.is_empty() {
         buf.clear();
-        if_tracing! {
-            debug!(target = "mtf", "mtf decode passthrough: input empty");
-        }
+        if_tracing! {{
+            tracing::debug!(target = "mtf", "mtf decode passthrough: input empty");
+        }}
         return Ok(());
     }
 
@@ -103,9 +99,9 @@ pub fn mtf_decode(encoded: &[u8], buf: &mut Vec<u8>) -> Result<()> {
         alphabet[0] = symbol;
     }
 
-    if_tracing! {
-        info!(target = "mtf", input_len = encoded.len(), output_len = buf.len(), "mtf decode complete");
-    }
+    if_tracing! {{
+        tracing::info!(target = "mtf", input_len = encoded.len(), output_len = buf.len(), "mtf decode complete");
+    }}
 
     Ok(())
 }

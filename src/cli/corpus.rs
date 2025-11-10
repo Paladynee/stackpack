@@ -11,8 +11,6 @@ use crate::{
     mutator::Mutator,
 };
 
-// add tracing imports
-use tracing::{debug, error, info};
 
 pub fn corpus(args: CorpusArgs) {
     run_folder(Path::new("./test_data"), args.pipeline_selection(), true);
@@ -103,10 +101,10 @@ fn validate_and_print_results(
         save_failed_equality_results_to_file(expected, intermediate, got, path);
     }
 
-    if_tracing! {
-        info!("==== {} {} ====", passed_string, path.display());
+    if_tracing! {{
+        tracing::info!("==== {} {} ====", passed_string, path.display());
 
-        debug!(
+        tracing::debug!(
             "encode: {:.0?}\ndecode: {:.0?}\noriginal: {} bytes\ncompressed: {} bytes\ndecompressed: {} bytes\nratio: {:.1}% (compressed/original)\nsaved: {:+} bytes ({:+.1}%)",
             compression_time,
             decompression_time,
@@ -121,12 +119,12 @@ fn validate_and_print_results(
         if !passed {
             let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown");
             let err_msg = res.as_ref().err().map(|e| e.to_string()).unwrap_or_else(|| "error".into());
-            error!(
+            tracing::error!(
                 "error: {}\nsee {}.expected.bin and {}.got.bin for details",
                 err_msg, filename, filename
             );
         }
-    };
+    }};
 
     if_not_tracing! {
         eprintln!("{} {}", passed_string, path.display());

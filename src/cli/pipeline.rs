@@ -3,7 +3,7 @@ use std::fs;
 use crate::{
     algorithms::pipeline::{CompressionPipeline, default_pipeline, get_preset, get_specific_compressor_from_name},
     cli::{PipelineCommand, PipelineSelection},
-    plugins::{FfiOption, LOADED_PLUGINS},
+    plugins::LOADED_PLUGINS,
     registered::ALL_COMPRESSORS,
 };
 
@@ -18,9 +18,9 @@ pub fn build_pipeline(selection: PipelineSelection) -> CompressionPipeline {
                 if let Some(comp) = get_specific_compressor_from_name(part) {
                     pipeline.push_algorithm(comp.clone());
                 } else {
-                    if_tracing! {
+                    if_tracing! {{
                         tracing::error!(event = "unknown_algorithm", algorithm = %part, "unknown algorithm specified in inline pipeline");
-                    }
+                    }}
                     panic!(
                         "unknown algorithm {:?}. you may have forgotten to enable plugins (unsafe), or not have the required plugins installed.",
                         part
