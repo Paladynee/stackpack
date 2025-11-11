@@ -11,7 +11,6 @@ use crate::{
     mutator::Mutator,
 };
 
-
 pub fn corpus(args: CorpusArgs) {
     run_folder(Path::new("./test_data"), args.pipeline_selection(), true);
 }

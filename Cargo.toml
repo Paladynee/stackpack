@@ -1,7 +1,7 @@
 [package]
 description = "A compressor-agnostic compression pipeline."
 edition = "2024"
-license = "MIT"
+license = "EUPLv1.2"
 name = "stackpack"
 repository = "https://github.com/Paladynee/stackpack"
 version = "1.0.1"
@@ -14,6 +14,9 @@ clap = { version = "4.4", features = ["derive"] }
 cfg-if = "1.0.4"
 libloading = "0.9.0"
 parking_lot = "0.12.5"
+image = { version = "0.25.8", optional = true, default-features = false, features = [
+    "default-formats",
+] }
 
 arcode = "0.2.4"
 # lzw = "0.10.0"
@@ -32,11 +35,12 @@ tracing-log = { version = "0.2.0", optional = true }
 # derive_fromstr = "0.1"
 # voxell_rng = "0.5.0"
 voxell_timer = "1.2.2"
-bsc_m03_sys = "0.1.0"
+bsc_m03_sys = "0.2.0"
 
 walkdir = "2.5.0"
 # no-panic = "0.1.35"
 
 [features]
-default = ["tracing"]
+default = ["tracing", "image"]
 tracing = ["dep:tracing", "dep:tracing-subscriber", "dep:tracing-log"]
+image = ["dep:image"]

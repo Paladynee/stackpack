@@ -10,11 +10,12 @@ pub mod mtf;
 pub mod pipeline;
 pub mod re_pair;
 pub mod serializing_algorithm;
+pub mod imgdecode;
 
 #[derive(Clone, Copy, Debug)]
 pub struct DynMutator {
-    pub drive_mutation: fn(data: &[u8], buf: &mut Vec<u8>) -> Result<()>,
-    pub revert_mutation: fn(data: &[u8], buf: &mut Vec<u8>) -> Result<()>,
+    pub(crate) drive_mutation: fn(data: &[u8], buf: &mut Vec<u8>) -> Result<()>,
+    pub(crate) revert_mutation: fn(data: &[u8], buf: &mut Vec<u8>) -> Result<()>,
 }
 
 impl Mutator for DynMutator {

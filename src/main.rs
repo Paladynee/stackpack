@@ -50,14 +50,15 @@ macro_rules! if_not_tracing {
     };
 }
 
+pub mod algorithms;
+pub mod cli;
+pub mod mutator;
+pub mod plugins;
+pub mod registered;
+
 use crate::cli::{Cli, Command};
 use clap::Parser;
 
-mod algorithms;
-mod cli;
-mod mutator;
-mod plugins;
-mod registered;
 mod units;
 
 fn main() {

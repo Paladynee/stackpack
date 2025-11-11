@@ -22,5 +22,4 @@ pub fn encode(args: EncodeArgs) {
     } else {
         fs::write(output_path, compressed_data).expect("Failed to write output file");
     }
-
 }

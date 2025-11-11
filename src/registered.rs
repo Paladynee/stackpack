@@ -4,7 +4,7 @@ use anyhow::Result;
 use parking_lot::Mutex;
 
 use crate::{
-    algorithms::{DynMutator, arcode, bsc, bwt, mtf, re_pair},
+    algorithms::{DynMutator, arcode, bsc, bwt, imgdecode, mtf, re_pair},
     mutator::Mutator,
     plugins::FfiMutator,
 };
@@ -17,9 +17,9 @@ pub enum EnumMutator {
 
 #[derive(Debug, Clone)]
 pub struct RegisteredCompressor {
-    pub mutator: EnumMutator,
-    pub name: &'static str,
-    pub short_description: Option<&'static str>,
+    pub(crate) mutator: EnumMutator,
+    pub(crate) name: &'static str,
+    pub(crate) short_description: Option<&'static str>,
 }
 
 impl RegisteredCompressor {
@@ -42,7 +42,7 @@ impl RegisteredCompressor {
 
 /// Algorithms that are available to stackpack, and ones that are loaded at runtime.
 pub static ALL_COMPRESSORS: LazyLock<Mutex<Vec<RegisteredCompressor>>> =
-    LazyLock::new(|| Mutex::new(vec![arcode::ArithmeticCoding, bwt::Bwt, mtf::Mtf, bsc::Bsc, re_pair::RePair]));
+    LazyLock::new(|| Mutex::new(vec![arcode::ArithmeticCoding, bwt::Bwt, mtf::Mtf, bsc::Bsc, re_pair::RePair, imgdecode::ImgDecoder]));
 
 impl Mutator for RegisteredCompressor {
     fn drive_mutation(&mut self, data: &[u8], buf: &mut Vec<u8>) -> Result<()> {

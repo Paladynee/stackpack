@@ -286,6 +286,11 @@ pub struct TestArgs {
     pub input: PathBuf,
     #[command(flatten)]
     pub pipeline: PipelineSelector,
+    #[arg(
+        long = "write_files_if_failed",
+        help = "Write compressed and decompressed files to input directory if a test fails."
+    )]
+    pub write_files_if_failed: bool,
 }
 
 impl TestArgs {

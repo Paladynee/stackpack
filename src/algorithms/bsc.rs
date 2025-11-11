@@ -26,9 +26,9 @@ pub const Bsc: RegisteredCompressor = RegisteredCompressor::new_dyn(
 const DESCRIPTION: &str = "bsc-m03 general purpose compressor by Ilya Grebnov.";
 
 fn bsc_encode(mut data: &[u8], output: &mut Vec<u8>) -> Result<()> {
-    if_tracing! {
+    if_tracing! {{
         tracing::debug!(target = "bsc", data.len = data.len(), "enter bsc encode");
-    };
+    }};
     output.clear();
     let mut remaining_size: i64 = data.len() as i64;
     let mut buffer_size = remaining_size.min(i32::MAX as i64) + 16384;

@@ -52,10 +52,10 @@ pub enum APIError {
 
 #[repr(C)]
 pub struct StackpackPluginAPI {
-    pub short_name: &'static str,
-    pub description: FfiOption<&'static str>,
-    pub drive_mutation: FunctionSignature,
-    pub revert_mutation: FunctionSignature,
+    pub(crate) short_name: &'static str,
+    pub(crate) description: FfiOption<&'static str>,
+    pub(crate) drive_mutation: FunctionSignature,
+    pub(crate) revert_mutation: FunctionSignature,
 }
 
 impl StackpackPluginAPI {
@@ -86,19 +86,18 @@ impl StackpackPluginAPI {
 }
 
 pub struct Plugin {
-    pub loaded_from: PathBuf,
-    pub api: StackpackPluginAPI,
-    pub lib: Library,
+    pub(crate) loaded_from: PathBuf,
+    pub(crate) api: StackpackPluginAPI,
+    pub(crate) _lib: Library,
 }
 
 impl Plugin {
     pub fn new(loaded_from: PathBuf, api: StackpackPluginAPI, lib: Library) -> Self {
-        Plugin { loaded_from, api, lib }
+        Plugin { loaded_from, api, _lib: lib }
     }
 }
 
 pub static LOADED_PLUGINS: LazyLock<Mutex<Vec<Plugin>>> = LazyLock::new(|| Mutex::new(vec![]));
-
 
 pub unsafe fn load_plugins() {
     if_tracing! {{
