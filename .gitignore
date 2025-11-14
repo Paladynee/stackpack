@@ -1,3 +1,10 @@
 /target
 sample_plugin/target
 sample_plugin/plugins
+*.tar*
+*.zst*
+*.bsc*
+*.sp*
+*.zip*
+*.xz*
+*.gz*
