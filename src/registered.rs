@@ -69,8 +69,8 @@ impl Mutator for RegisteredCompressor {
             let span = tracing::span!(tracing::Level::DEBUG, "registered decompressor", name = self.name);
             let _span = span.enter();
             let res = match self.mutator {
-                EnumMutator::Dyn(m) => (m.drive_mutation)(data, buf),
-                EnumMutator::Ffi(ref mut m) => m.drive_mutation(data, buf),
+                EnumMutator::Dyn(m) => (m.revert_mutation)(data, buf),
+                EnumMutator::Ffi(ref mut m) => m.revert_mutation(data, buf),
             };
             drop(_span);
             res

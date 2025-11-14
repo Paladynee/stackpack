@@ -77,7 +77,7 @@ fn main() {
                     "trace" => Some(tracing::Level::TRACE),
                     "debug" => Some(tracing::Level::DEBUG),
                     "info" => Some(tracing::Level::INFO),
-                    "warn" | "warning" => Some(tracing::Level::WARN),
+                    "warn" => Some(tracing::Level::WARN),
                     "error" => Some(tracing::Level::ERROR),
                     _ => None,
                 }
@@ -90,6 +90,7 @@ fn main() {
 
         let subscriber = tracing_subscriber::fmt()
             .with_max_level(max_level)
+            .with_ansi(true)
             .with_target(false)
             .finish();
         tracing::subscriber::set_global_default(subscriber).ok();
